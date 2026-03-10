@@ -1,18 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Calendar, Clock3, FileBadge2, Workflow } from "lucide-react";
+import { Calendar, Clock3, Workflow } from "lucide-react";
 
-const cards = [
-  { title: "Timbrature oggi", value: "2", icon: Clock3 },
-  { title: "Ferie residue", value: "14 gg", icon: Calendar },
-  { title: "Cedolini disponibili", value: "12", icon: FileBadge2 },
-  { title: "Workflow in attesa", value: "3", icon: Workflow }
-];
+interface Props {
+  todayEntriesCount: number;
+}
 
-export function Dashboard(): React.JSX.Element {
+export function Dashboard({ todayEntriesCount }: Props): React.JSX.Element {
+  const cards = [
+    { title: "Timbrature oggi", value: String(todayEntriesCount), icon: Clock3 },
+    { title: "Ferie residue", value: "14 gg", icon: Calendar },
+    { title: "Workflow in attesa", value: "3", icon: Workflow }
+  ];
+
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {cards.map((card, index) => (
         <motion.article
           key={card.title}

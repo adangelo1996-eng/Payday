@@ -36,11 +36,40 @@ Note:
 - la configurazione CLI e' in `infra/supabase/config.toml`
 - il backend usa Supabase solo se trova entrambe le env `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`
 - se manca una delle due env, l'API usa fallback in-memory (utile solo per demo)
+- autenticazione backend via JWT (`AUTH_JWT_SECRET`) e credenziali demo per ruolo
 
 Quando hai i valori reali (`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`):
 1. aggiornali in `apps/api/.env`
 2. aggiungili anche nel progetto Vercel API (`payday-api`) in `Environment Variables`
 3. fai un nuovo deploy dell'API
+
+## Login applicativo
+
+Il frontend usa login reale su `POST /api/auth/login` e token JWT Bearer.
+
+Credenziali demo:
+- `admin@payday.ch` / `AdminPayday123!`
+- `manager@payday.ch` / `ManagerPayday123!`
+- `employee@payday.ch` / `EmployeePayday123!`
+
+Le password demo sono configurabili con:
+- `AUTH_ADMIN_PASSWORD`
+- `AUTH_MANAGER_PASSWORD`
+- `AUTH_EMPLOYEE_PASSWORD`
+
+## Nuove funzionalita dashboard/payroll
+
+- Dashboard:
+  - rimosso widget "Cedolini disponibili"
+  - aggiunti bottoni `Timbratura entrata` e `Timbratura uscita`
+  - aggiunto storico timbrature recenti e riepilogo giornaliero
+- Pagina `attendance`:
+  - storico completo timbrature per giorno (oggi e giorni passati)
+  - riepilogo minuti lavorati e modalita (office/smartworking)
+- Pagina `payroll-calc` (solo manager/admin):
+  - selezione dipendente + periodo
+  - calcolo cedolino con endpoint backend
+  - export PDF dal risultato
 
 ## Deploy su Vercel (apps/web)
 
@@ -53,7 +82,12 @@ Quando hai i valori reali (`SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`):
 Note:
 - il deploy Vercel e' configurato per l'app Next.js in `apps/web`
 - API/backend (`apps/api`) restano fuori dal deploy Vercel e vanno pubblicati separatamente
-- configurare in Vercel le env necessarie dell'app web (es. endpoint API pubblica)
+- configurare in Vercel le env necessarie dell'app web:
+  - `NEXT_PUBLIC_API_BASE_URL=https://<tuo-backend-vercel>`
+- configurare in Vercel le env necessarie dell'app API:
+  - `CORS_ORIGIN=https://<tuo-frontend-vercel>`
+  - `AUTH_JWT_SECRET=<chiave-lunga-casuale>`
+  - `AUTH_ADMIN_PASSWORD`, `AUTH_MANAGER_PASSWORD`, `AUTH_EMPLOYEE_PASSWORD`
 
 ## Note compliance CH
 

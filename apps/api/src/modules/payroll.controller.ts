@@ -5,11 +5,10 @@ import {
   Param,
   Post,
   Query,
-  StreamableFile,
-  UseGuards
+  StreamableFile
 } from "@nestjs/common";
 import PDFDocument from "pdfkit";
-import { CurrentAuth, RequireRole, RoleGuard } from "./auth";
+import { CurrentAuth } from "./auth";
 import { HrDataStore } from "./hr-data.store";
 
 @Controller("payroll")
@@ -17,9 +16,21 @@ export class PayrollController {
   constructor(private readonly store: HrDataStore) {}
 
   @Post(":userId/:period/generate")
-  @UseGuards(RoleGuard)
-  @RequireRole("manager_controllo_gestione")
-  async generate(@Param("userId") userId: string, @Param("period") period: string): Promise<unknown> {
+  async generate(
+    @CurrentAuth() auth: { userId: string; role: string },
+    @Param("userId") userId: string,
+    @Param("period") period: string
+  ): Promise<unknown> {
+    if (auth.role !== "admin" && auth.role !== "manager_controllo_gestione") {
+      throw new ForbiddenException("Solo manager/admin possono generare cedolini di altri utenti");
+    }
+    if (
+      auth.role === "manager_controllo_gestione" &&
+      userId !== auth.userId &&
+      !(await this.store.isManagerOf(auth.userId, userId))
+    ) {
+      throw new ForbiddenException("Manager può generare solo cedolini dei sottoposti");
+    }
     return this.store.generatePayslip(userId, period);
   }
 

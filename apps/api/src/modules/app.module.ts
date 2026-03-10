@@ -2,6 +2,8 @@ import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR } from "@nestjs/core";
 import { AttendanceController } from "./attendance.controller";
 import { AuditInterceptor } from "./audit.interceptor";
+import { AuthController } from "./auth.controller";
+import { AuthService } from "./auth.service";
 import { HrDataStore } from "./hr-data.store";
 import { LeaveController } from "./leave.controller";
 import { OrgController } from "./org.controller";
@@ -11,6 +13,7 @@ import { UserController } from "./user.controller";
 
 @Module({
   controllers: [
+    AuthController,
     UserController,
     AttendanceController,
     LeaveController,
@@ -20,6 +23,7 @@ import { UserController } from "./user.controller";
   ],
   providers: [
     HrDataStore,
+    AuthService,
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor

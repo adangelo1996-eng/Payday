@@ -15,6 +15,13 @@ class AssignRoleDto {
 export class UserController {
   constructor(private readonly store: HrDataStore) {}
 
+  @Get()
+  @UseGuards(RoleGuard)
+  @RequireRole("manager_controllo_gestione")
+  async list(): Promise<unknown> {
+    return this.store.listUsers();
+  }
+
   @Get("me")
   async me(@CurrentAuth() auth: { userId: string }): Promise<unknown> {
     return this.store.getUser(auth.userId);

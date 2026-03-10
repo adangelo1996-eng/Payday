@@ -10,6 +10,7 @@
     "test": "echo \"no tests yet\""
   },
   "dependencies": {
+    "@xyflow/react": "^12.8.5",
     "framer-motion": "^11.11.17",
     "lucide-react": "^0.468.0",
     "next": "^15.1.0",

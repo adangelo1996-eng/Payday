@@ -22,8 +22,6 @@ export class OrgController {
   constructor(private readonly store: HrDataStore) {}
 
   @Get("chart")
-  @UseGuards(RoleGuard)
-  @RequireRole("manager_controllo_gestione")
   async chart(): Promise<unknown> {
     return this.store.getOrgChart();
   }

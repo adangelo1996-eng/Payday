@@ -5,33 +5,75 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
   SetMetadata
 } from "@nestjs/common";
+import { verify } from "jsonwebtoken";
 import type { Request } from "express";
+
+export type AuthRole = "admin" | "manager_controllo_gestione" | "employee";
 
 export interface AuthContext {
   userId: string;
-  role: "admin" | "manager_controllo_gestione" | "employee";
+  role: AuthRole;
 }
 
 export const AUTH_ROLE_KEY = "auth-role";
 export const RequireRole = (role: AuthContext["role"]) => SetMetadata(AUTH_ROLE_KEY, role);
 
+interface TokenPayload {
+  sub: string;
+  role: AuthRole;
+}
+
+const VALID_ROLES = ["admin", "manager_controllo_gestione", "employee"] as const;
+
+function isValidRole(role: string): role is AuthRole {
+  return VALID_ROLES.includes(role as AuthRole);
+}
+
+function fromLegacyHeaders(request: Request): AuthContext | undefined {
+  const userId = request.headers["x-user-id"];
+  const role = request.headers["x-role"];
+  if (typeof userId !== "string" || typeof role !== "string") {
+    return undefined;
+  }
+  if (!isValidRole(role)) {
+    throw new BadRequestException("Ruolo non valido");
+  }
+  return { userId, role };
+}
+
+function fromBearerToken(request: Request): AuthContext | undefined {
+  const header = request.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
+    return undefined;
+  }
+  const token = header.slice("Bearer ".length).trim();
+  const secret = process.env.AUTH_JWT_SECRET ?? "dev-payday-secret-change-me";
+  const payload = verify(token, secret) as TokenPayload;
+  if (!payload?.sub || typeof payload.sub !== "string" || !payload.role || !isValidRole(payload.role)) {
+    throw new UnauthorizedException("Token non valido");
+  }
+  return { userId: payload.sub, role: payload.role };
+}
+
+export function getAuthContext(request: Request): AuthContext {
+  const fromToken = fromBearerToken(request);
+  if (fromToken) {
+    return fromToken;
+  }
+  const fromHeaders = fromLegacyHeaders(request);
+  if (fromHeaders) {
+    return fromHeaders;
+  }
+  throw new UnauthorizedException("Autenticazione richiesta");
+}
+
 export const CurrentAuth = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): AuthContext => {
     const request = ctx.switchToHttp().getRequest<Request>();
-    const userId = request.headers["x-user-id"];
-    const role = request.headers["x-role"];
-
-    if (typeof userId !== "string" || typeof role !== "string") {
-      throw new BadRequestException("Headers x-user-id e x-role obbligatori");
-    }
-
-    if (!["admin", "manager_controllo_gestione", "employee"].includes(role)) {
-      throw new BadRequestException("Ruolo non valido");
-    }
-
-    return { userId, role: role as AuthContext["role"] };
+    return getAuthContext(request);
   }
 );
 
@@ -45,8 +87,8 @@ export class RoleGuard implements CanActivate {
       return true;
     }
     const request = context.switchToHttp().getRequest<Request>();
-    const role = request.headers["x-role"];
-    if (role !== requiredRole && role !== "admin") {
+    const auth = getAuthContext(request);
+    if (auth.role !== requiredRole && auth.role !== "admin") {
       throw new ForbiddenException("Permessi insufficienti");
     }
     return true;
