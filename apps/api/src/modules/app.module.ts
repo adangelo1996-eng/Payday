@@ -1,0 +1,29 @@
+import { Module } from "@nestjs/common";
+import { APP_INTERCEPTOR } from "@nestjs/core";
+import { AttendanceController } from "./attendance.controller";
+import { AuditInterceptor } from "./audit.interceptor";
+import { HrDataStore } from "./hr-data.store";
+import { LeaveController } from "./leave.controller";
+import { OrgController } from "./org.controller";
+import { PayrollController } from "./payroll.controller";
+import { SicknessController } from "./sickness.controller";
+import { UserController } from "./user.controller";
+
+@Module({
+  controllers: [
+    UserController,
+    AttendanceController,
+    LeaveController,
+    SicknessController,
+    OrgController,
+    PayrollController
+  ],
+  providers: [
+    HrDataStore,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor
+    }
+  ]
+})
+export class AppModule {}

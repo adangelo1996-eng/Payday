@@ -1,0 +1,15 @@
+{
+  "name": "payday-hr-cloud-ch",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.6.0",
+  "scripts": {
+    "build": "corepack pnpm -r build",
+    "lint": "corepack pnpm -r lint",
+    "test": "corepack pnpm -r test",
+    "dev": "corepack pnpm --parallel --filter @payday/api --filter @payday/web dev"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}
