@@ -49,20 +49,15 @@ export default function HomePage(): React.JSX.Element {
 
     async function load(): Promise<void> {
       try {
-        const [me, payslipList, chart] = await Promise.all([
-          fetchCurrentUser(tokenValue),
-          fetchPayslips(tokenValue),
-          fetchOrgChart(tokenValue)
-        ]);
-        const [entriesList, summaryList] = await Promise.all([
-          fetchAttendanceEntries(tokenValue),
-          fetchAttendanceSummary(tokenValue)
-        ]);
+        const me = await fetchCurrentUser(tokenValue);
+
+        // Per ora inizializziamo i dati secondari a liste vuote.
+        // Li collegheremo alle Edge Functions Supabase nei passi successivi.
         setUser(me);
-        setPayslips(payslipList);
-        setOrgData(chart);
-        setEntries(entriesList);
-        setSummary(summaryList);
+        setPayslips([]);
+        setOrgData({ nodes: [], edges: [] });
+        setEntries([]);
+        setSummary([]);
       } catch (loadError) {
         clearSession();
         router.replace("/login");
