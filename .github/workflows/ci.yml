@@ -16,12 +16,10 @@ jobs:
       # #endregion
       - id: pnpm_setup
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
       # #region agent log
       - name: Debug pnpm setup outcome
         if: always()
-        run: node -e "const data={sessionId:'15f245',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:build-test:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'10'},timestamp:Date.now()};fetch('http://127.0.0.1:7942/ingest/1c5611e9-a0b8-4fb5-8eee-a548a1a5a71d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'15f245'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
+        run: node -e "const data={sessionId:'15f245',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:build-test:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'from-packageManager'},timestamp:Date.now()};fetch('http://127.0.0.1:7942/ingest/1c5611e9-a0b8-4fb5-8eee-a548a1a5a71d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'15f245'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
       # #endregion
       - uses: actions/setup-node@v4
         with:
@@ -48,12 +46,10 @@ jobs:
       # #endregion
       - id: pnpm_setup
         uses: pnpm/action-setup@v4
-        with:
-          version: 10
       # #region agent log
       - name: Debug pnpm setup outcome (security job)
         if: always()
-        run: node -e "const data={sessionId:'15f245',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:security-audit:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'10'},timestamp:Date.now()};fetch('http://127.0.0.1:7942/ingest/1c5611e9-a0b8-4fb5-8eee-a548a1a5a71d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'15f245'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
+        run: node -e "const data={sessionId:'15f245',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:security-audit:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'from-packageManager'},timestamp:Date.now()};fetch('http://127.0.0.1:7942/ingest/1c5611e9-a0b8-4fb5-8eee-a548a1a5a71d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'15f245'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
       # #endregion
       - uses: actions/setup-node@v4
         with:
