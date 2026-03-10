@@ -30,6 +30,7 @@ jobs:
         with:
           node-version: 22
           cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
       # #region agent log
       - name: Debug setup-node/cache outcome (build-test)
         if: always()
@@ -70,6 +71,7 @@ jobs:
         with:
           node-version: 22
           cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
       # #region agent log
       - name: Debug setup-node/cache outcome (security)
         if: always()

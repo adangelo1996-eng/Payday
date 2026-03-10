@@ -6,6 +6,5 @@ coverage
 .env.*
 !.env.example
 *.log
-pnpm-lock.yaml
 *.tsbuildinfo
 uploads
