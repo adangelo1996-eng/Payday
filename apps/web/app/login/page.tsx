@@ -3,8 +3,8 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "@/lib/api";
-import { saveSession } from "@/lib/auth-session";
+import { saveSession, type SessionUser } from "@/lib/auth-session";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,8 +21,32 @@ export default function LoginPage(): React.JSX.Element {
     setError(null);
     setLoading(true);
     try {
-      const session = await login(email, password);
-      saveSession(session.token, session.user);
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      if (authError || !data.session || !data.user) {
+        throw new Error(authError?.message ?? "Credenziali non valide");
+      }
+
+      const { data: userRow, error: userError } = await supabase
+        .from("users")
+        .select('id, email, "fullName", role')
+        .eq("email", email)
+        .single();
+      if (userError || !userRow) {
+        throw new Error(userError?.message ?? "Utente applicativo non trovato");
+      }
+
+      const sessionUser: SessionUser = {
+        id: userRow.id,
+        email: userRow.email,
+        fullName: userRow.fullName,
+        role: userRow.role
+      };
+
+      const token = data.session.access_token;
+      saveSession(token, sessionUser);
       router.replace("/");
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "Login non riuscito");
