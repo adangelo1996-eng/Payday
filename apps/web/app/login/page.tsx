@@ -46,6 +46,29 @@ export default function LoginPage(): React.JSX.Element {
       };
 
       const token = data.session.access_token;
+
+      // #region agent log
+      fetch("http://127.0.0.1:7773/ingest/f66d9d87-9031-47a1-a078-e26a7e72191d", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Debug-Session-Id": "228f3b"
+        },
+        body: JSON.stringify({
+          sessionId: "228f3b",
+          runId: "pre-fix",
+          hypothesisId: "H3",
+          location: "apps/web/app/login/page.tsx:onSubmit:afterLogin",
+          message: "Supabase login succeeded",
+          data: {
+            hasSession: Boolean(data.session),
+            tokenLength: token.length
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {});
+      // #endregion agent log
+
       saveSession(token, sessionUser);
       router.replace("/");
     } catch (submissionError) {

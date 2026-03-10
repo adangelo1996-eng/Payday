@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionUser, UserRole } from "./auth-session";
+import { getSessionUser, type SessionUser, type UserRole } from "./auth-session";
 
 export interface Payslip {
   id: string;
@@ -100,20 +100,35 @@ export async function login(email: string, password: string): Promise<{ token: s
 }
 
 export async function fetchCurrentUser(token: string): Promise<SessionUser> {
-  const response = await fetch(
-    "https://kcaliyzmsvsrkuonnmrc.supabase.co/functions/v1/payday-users-me",
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    }
-  );
-  if (!response.ok) {
-    await parseError(response);
+  const cached = getSessionUser();
+
+  // #region agent log
+  fetch("http://127.0.0.1:7773/ingest/f66d9d87-9031-47a1-a078-e26a7e72191d", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "228f3b"
+    },
+    body: JSON.stringify({
+      sessionId: "228f3b",
+      runId: "pre-fix",
+      hypothesisId: "H4",
+      location: "apps/web/lib/api.ts:fetchCurrentUser:useCachedSession",
+      message: "Using cached session user",
+      data: {
+        hasCached: Boolean(cached),
+        hasToken: Boolean(token)
+      },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion agent log
+
+  if (!cached) {
+    throw new Error("Sessione non disponibile");
   }
-  return (await response.json()) as SessionUser;
+
+  return cached;
 }
 
 export async function fetchPayslips(token: string): Promise<Payslip[]> {
