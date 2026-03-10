@@ -13,7 +13,8 @@ export default function RootLayout({
 }>): React.JSX.Element {
   return (
     <html lang="it">
-      <body>{children}</body>
+      <body className="bg-bg text-slate-100 antialiased">{children}</body>
     </html>
   );
 }
+

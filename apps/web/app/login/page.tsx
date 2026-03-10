@@ -5,6 +5,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { login } from "@/lib/api";
 import { saveSession } from "@/lib/auth-session";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage(): React.JSX.Element {
   const router = useRouter();
@@ -29,44 +32,49 @@ export default function LoginPage(): React.JSX.Element {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <motion.form
-        onSubmit={onSubmit}
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-950 to-slate-950 px-6">
+      <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card w-full max-w-md space-y-4"
+        className="w-full max-w-md"
       >
-        <h1 className="text-2xl font-semibold">Accesso area riservata</h1>
-        <p className="text-sm text-slate-400">
-          Login con credenziali aziendali. I ruoli sono assegnati da admin.
-        </p>
-        <input
-          className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2"
-          type="email"
-          placeholder="email@azienda.ch"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-        <input
-          className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2"
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-cyan-400 px-3 py-2 font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {loading ? "Accesso in corso..." : "Entra"}
-        </button>
-        <p className="text-xs text-slate-500">
-          Demo: admin@payday.ch / AdminPayday123! - manager@payday.ch / ManagerPayday123! -
-          employee@payday.ch / EmployeePayday123!
-        </p>
-      </motion.form>
+        <Card>
+          <CardHeader>
+            <CardTitle>Accesso area riservata</CardTitle>
+            <CardDescription>
+              Login con credenziali aziendali. I ruoli sono assegnati da admin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={onSubmit} className="space-y-4">
+              <Input
+                type="email"
+                placeholder="email@azienda.ch"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                autoComplete="email"
+                required
+              />
+              <Input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+              {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+              <Button type="submit" disabled={loading} className="w-full" size="md" variant="primary">
+                {loading ? "Accesso in corso..." : "Entra"}
+              </Button>
+            </form>
+            <p className="mt-4 text-xs text-slate-500">
+              Demo: admin@payday.ch / AdminPayday123! - manager@payday.ch / ManagerPayday123! - employee@payday.ch /
+              EmployeePayday123!
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
     </main>
   );
 }
