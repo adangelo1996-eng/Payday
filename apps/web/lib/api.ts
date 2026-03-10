@@ -100,10 +100,16 @@ export async function login(email: string, password: string): Promise<{ token: s
 }
 
 export async function fetchCurrentUser(token: string): Promise<SessionUser> {
-  const response = await fetch(buildApiUrl("/users/me"), {
-    method: "GET",
-    headers: getAuthHeaders(token)
-  });
+  const response = await fetch(
+    "https://kcaliyzmsvsrkuonnmrc.supabase.co/functions/v1/payday-users-me",
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
   if (!response.ok) {
     await parseError(response);
   }
