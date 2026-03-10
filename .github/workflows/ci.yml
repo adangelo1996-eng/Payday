@@ -10,36 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # #region agent log
-      - name: Debug packageManager declaration
-        run: node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H4',location:'.github/workflows/ci.yml:build-test:debug-package-manager',message:'package.json packageManager value',data:{packageManager:pkg.packageManager||null},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG packageManager:',pkg.packageManager||'missing');"
-      # #endregion
-      # #region agent log
-      - name: Debug workspace and lockfile (build-test)
-        run: node -e "const fs=require('fs');const path=require('path');const cwd=process.cwd();const lock=path.join(cwd,'pnpm-lock.yaml');const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H1',location:'.github/workflows/ci.yml:build-test:debug-lockfile',message:'workspace and lockfile presence',data:{cwd,lockfileExists:fs.existsSync(lock),gitignoreHasLockfileIgnore:fs.readFileSync('.gitignore','utf8').split(/\\r?\\n/).includes('pnpm-lock.yaml')},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG lockfile exists:',fs.existsSync(lock));"
-      # #endregion
-      - id: pnpm_setup
-        uses: pnpm/action-setup@v4
-      # #region agent log
-      - name: Debug pnpm setup outcome
-        if: always()
-        run: node -e "const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H4',location:'.github/workflows/ci.yml:build-test:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'from-packageManager'},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
-      # #endregion
-      - id: node_setup
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
-      # #region agent log
-      - name: Debug setup-node/cache outcome (build-test)
-        if: always()
-        run: node -e "const fs=require('fs');const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:build-test:debug-setup-node-outcome',message:'setup-node cache and lockfile state',data:{outcome:'${{ steps.node_setup.outcome }}',conclusion:'${{ steps.node_setup.conclusion }}',lockfileExists:fs.existsSync('pnpm-lock.yaml')},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG setup-node outcome:', '${{ steps.node_setup.outcome }}');"
-      # #endregion
-      # #region agent log
-      - name: Debug install command path
-        run: node -e "const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H3',location:'.github/workflows/ci.yml:build-test:debug-install-command',message:'install command invocation',data:{command:'pnpm install --frozen-lockfile=false',cwd:process.cwd()},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG install command uses pnpm directly');"
-      # #endregion
       - name: Install dependencies
         run: pnpm install --frozen-lockfile=false
       - name: Build
@@ -51,31 +27,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # #region agent log
-      - name: Debug packageManager declaration (security job)
-        run: node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H4',location:'.github/workflows/ci.yml:security-audit:debug-package-manager',message:'package.json packageManager value',data:{packageManager:pkg.packageManager||null},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG packageManager:',pkg.packageManager||'missing');"
-      # #endregion
-      # #region agent log
-      - name: Debug workspace and lockfile (security)
-        run: node -e "const fs=require('fs');const path=require('path');const cwd=process.cwd();const lock=path.join(cwd,'pnpm-lock.yaml');const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H1',location:'.github/workflows/ci.yml:security-audit:debug-lockfile',message:'workspace and lockfile presence',data:{cwd,lockfileExists:fs.existsSync(lock),gitignoreHasLockfileIgnore:fs.readFileSync('.gitignore','utf8').split(/\\r?\\n/).includes('pnpm-lock.yaml')},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG lockfile exists:',fs.existsSync(lock));"
-      # #endregion
-      - id: pnpm_setup
-        uses: pnpm/action-setup@v4
-      # #region agent log
-      - name: Debug pnpm setup outcome (security job)
-        if: always()
-        run: node -e "const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H4',location:'.github/workflows/ci.yml:security-audit:debug-pnpm-setup-outcome',message:'pnpm/action-setup outcome',data:{outcome:'${{ steps.pnpm_setup.outcome }}',conclusion:'${{ steps.pnpm_setup.conclusion }}',configuredVersion:'from-packageManager'},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG pnpm setup outcome:', '${{ steps.pnpm_setup.outcome }}');"
-      # #endregion
-      - id: node_setup
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: "pnpm"
           cache-dependency-path: pnpm-lock.yaml
-      # #region agent log
-      - name: Debug setup-node/cache outcome (security)
-        if: always()
-        run: node -e "const fs=require('fs');const data={sessionId:'e282ff',runId:'ci-pre-fix',hypothesisId:'H2',location:'.github/workflows/ci.yml:security-audit:debug-setup-node-outcome',message:'setup-node cache and lockfile state',data:{outcome:'${{ steps.node_setup.outcome }}',conclusion:'${{ steps.node_setup.conclusion }}',lockfileExists:fs.existsSync('pnpm-lock.yaml')},timestamp:Date.now()};fetch('http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e282ff'},body:JSON.stringify(data)}).catch(()=>{});console.log('DEBUG setup-node outcome:', '${{ steps.node_setup.outcome }}');"
-      # #endregion
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm audit --prod
