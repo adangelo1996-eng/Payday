@@ -101,29 +101,6 @@ export async function login(email: string, password: string): Promise<{ token: s
 
 export async function fetchCurrentUser(token: string): Promise<SessionUser> {
   const cached = getSessionUser();
-
-  // #region agent log
-  fetch("http://127.0.0.1:7773/ingest/f66d9d87-9031-47a1-a078-e26a7e72191d", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "228f3b"
-    },
-    body: JSON.stringify({
-      sessionId: "228f3b",
-      runId: "pre-fix",
-      hypothesisId: "H4",
-      location: "apps/web/lib/api.ts:fetchCurrentUser:useCachedSession",
-      message: "Using cached session user",
-      data: {
-        hasCached: Boolean(cached),
-        hasToken: Boolean(token)
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {});
-  // #endregion agent log
-
   if (!cached) {
     throw new Error("Sessione non disponibile");
   }

@@ -12,7 +12,7 @@ async function bootstrap(): Promise<void> {
   app.enableCors({ origin: corsOrigin.split(",").map((value) => value.trim()) });
   app.setGlobalPrefix("api");
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  const port = Number(process.env.API_PORT ?? 4000);
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   await app.listen(port, "0.0.0.0");
 }
 
