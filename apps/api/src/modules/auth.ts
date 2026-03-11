@@ -51,7 +51,12 @@ function fromBearerToken(request: Request): AuthContext | undefined {
   }
   const token = header.slice("Bearer ".length).trim();
   const secret = process.env.AUTH_JWT_SECRET ?? "dev-payday-secret-change-me";
-  const payload = verify(token, secret) as TokenPayload;
+  let payload: TokenPayload;
+  try {
+    payload = verify(token, secret, { algorithms: ["HS256"] }) as TokenPayload;
+  } catch {
+    throw new UnauthorizedException("Token non valido o scaduto");
+  }
   if (!payload?.sub || typeof payload.sub !== "string" || !payload.role || !isValidRole(payload.role)) {
     throw new UnauthorizedException("Token non valido");
   }
