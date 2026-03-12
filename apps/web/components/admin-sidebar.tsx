@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { adminStrings } from "@/app/admin/strings";
 
 interface AdminNavItem {
-  href: string;
+  href: Route;
   label: string;
 }
 
