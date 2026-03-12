@@ -34,12 +34,26 @@ export class AttendanceController {
   }
 
   @Get("entries")
-  async entries(@CurrentAuth() auth: { userId: string }, @Query("userId") userId?: string): Promise<unknown> {
-    return this.store.listTimeEntries(userId ?? auth.userId);
+  async entries(
+    @CurrentAuth() auth: { userId: string },
+    @Query("userId") userId?: string,
+    @Query("date") date?: string
+  ): Promise<unknown> {
+    return this.store.listTimeEntries(userId ?? auth.userId, date);
   }
 
   @Get("summary")
-  async summary(@CurrentAuth() auth: { userId: string }, @Query("userId") userId?: string): Promise<unknown> {
-    return this.store.listWorkdaySummary(userId ?? auth.userId);
+  async summary(
+    @CurrentAuth() auth: { userId: string },
+    @Query("userId") userId?: string,
+    @Query("date") date?: string
+  ): Promise<unknown> {
+    return this.store.listWorkdaySummary(userId ?? auth.userId, date);
+  }
+
+  @Get("status")
+  async status(@CurrentAuth() auth: { userId: string }, @Query("date") date?: string): Promise<unknown> {
+    const targetDate = date ?? new Date().toISOString().slice(0, 10);
+    return this.store.getClockStatus(auth.userId, targetDate);
   }
 }

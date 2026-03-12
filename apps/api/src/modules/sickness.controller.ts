@@ -57,6 +57,17 @@ export class SicknessController {
     return this.store.approveSickness(id, auth.userId);
   }
 
+  @Patch("reject/:id")
+  @UseGuards(RoleGuard)
+  @RequireRole("manager_controllo_gestione")
+  async reject(@Param("id") id: string, @CurrentAuth() auth: { userId: string }): Promise<unknown> {
+    const sickness = await this.store.getSickness(id);
+    if (!(await this.store.isManagerOf(auth.userId, sickness.userId))) {
+      throw new ForbiddenException("Manager non autorizzato per questo dipendente");
+    }
+    return this.store.rejectSickness(id, auth.userId);
+  }
+
   @Get("events")
   async list(@CurrentAuth() auth: { userId: string }): Promise<unknown> {
     return this.store.listSickness(auth.userId);

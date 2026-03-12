@@ -7,6 +7,10 @@ export interface SessionUser {
   email: string;
   fullName: string;
   role: UserRole;
+  managerId?: string;
+  companyId?: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
 }
 
 const TOKEN_KEY = "payday_auth_token";

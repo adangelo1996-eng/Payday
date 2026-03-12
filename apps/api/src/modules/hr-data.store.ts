@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ApprovalView,
+  LeaveBalance,
   LeavePlan,
   Payslip,
   SicknessEvent,
@@ -20,6 +22,32 @@ interface ApprovalRecord {
   at: string;
 }
 
+interface UserCreateInput {
+  firstName: string;
+  lastName: string;
+  role: User["role"];
+  managerId?: string;
+  companyId: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
+}
+
+interface UserUpdateInput {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  managerId?: string;
+  role?: User["role"];
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
+}
+
 interface Delegation {
   managerId: string;
   delegateManagerId: string;
@@ -34,25 +62,37 @@ export class HrDataStore {
   private readonly users: User[] = [
     {
       id: "u-admin",
-      email: "admin@payday.ch",
+      email: "hr.admin@payday.local",
       fullName: "HR Admin",
+      firstName: "HR",
+      lastName: "Admin",
       role: "admin",
-      companyId: "comp-1"
+      companyId: "comp-1",
+      dailyTargetSeconds: 28800,
+      vacationAllowanceDays: 26
     },
     {
       id: "u-manager",
-      email: "manager@payday.ch",
+      email: "manager.controllo@payday.local",
       fullName: "Manager Controllo",
+      firstName: "Manager",
+      lastName: "Controllo",
       role: "manager_controllo_gestione",
-      companyId: "comp-1"
+      companyId: "comp-1",
+      dailyTargetSeconds: 28800,
+      vacationAllowanceDays: 24
     },
     {
       id: "u-employee",
-      email: "employee@payday.ch",
+      email: "dipendente.demo@payday.local",
       fullName: "Dipendente Demo",
+      firstName: "Dipendente",
+      lastName: "Demo",
       role: "employee",
       managerId: "u-manager",
-      companyId: "comp-1"
+      companyId: "comp-1",
+      dailyTargetSeconds: 28800,
+      vacationAllowanceDays: 22
     }
   ];
 
@@ -115,6 +155,113 @@ export class HrDataStore {
     return user;
   }
 
+  async listUsersByManager(managerId: string): Promise<User[]> {
+    const users = await this.listUsers();
+    return users.filter((item) => item.managerId === managerId);
+  }
+
+  private normalizePart(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]+/g, ".");
+  }
+
+  private composeEmail(firstName: string, lastName: string): string {
+    const localPart = `${this.normalizePart(firstName)}.${this.normalizePart(lastName)}`.replace(/\.+/g, ".");
+    return `${localPart}@payday.local`;
+  }
+
+  private async getUniqueEmail(firstName: string, lastName: string): Promise<string> {
+    const users = await this.listUsers();
+    const base = this.composeEmail(firstName, lastName);
+    if (!users.some((item) => item.email.toLowerCase() === base.toLowerCase())) {
+      return base;
+    }
+    let suffix = 1;
+    while (suffix < 5000) {
+      const [local] = base.split("@");
+      const candidate = `${local}${suffix}@payday.local`;
+      if (!users.some((item) => item.email.toLowerCase() === candidate.toLowerCase())) {
+        return candidate;
+      }
+      suffix += 1;
+    }
+    throw new BadRequestException("Impossibile generare una email univoca");
+  }
+
+  private computeFullName(firstName: string, lastName: string): string {
+    return `${firstName.trim()} ${lastName.trim()}`.replace(/\s+/g, " ").trim();
+  }
+
+  async createUser(input: UserCreateInput): Promise<User> {
+    const firstName = input.firstName.trim();
+    const lastName = input.lastName.trim();
+    if (!firstName || !lastName) {
+      throw new BadRequestException("Nome e cognome sono obbligatori");
+    }
+    const fullName = this.computeFullName(firstName, lastName);
+    const email = await this.getUniqueEmail(firstName, lastName);
+    const user: User = {
+      id: `u-${Date.now()}`,
+      firstName,
+      lastName,
+      fullName,
+      email,
+      role: input.role,
+      managerId: input.managerId,
+      companyId: input.companyId,
+      dailyTargetSeconds: input.dailyTargetSeconds ?? 28800,
+      vacationAllowanceDays: input.vacationAllowanceDays ?? 22,
+      birthDate: input.birthDate,
+      phone: input.phone,
+      address: input.address
+    };
+    if (this.useDb) {
+      await this.supabase!.from("users").insert(user);
+      return user;
+    }
+    this.users.push(user);
+    return user;
+  }
+
+  async updateUser(userId: string, input: UserUpdateInput): Promise<User> {
+    const user = await this.getUser(userId);
+    const nextFirstName = input.firstName ?? user.firstName ?? user.fullName.split(" ")[0] ?? "";
+    const nextLastName = input.lastName ?? user.lastName ?? user.fullName.split(" ").slice(1).join(" ") ?? "";
+    const fullName = input.fullName ?? this.computeFullName(nextFirstName, nextLastName);
+    const payload: User = {
+      ...user,
+      ...input,
+      firstName: nextFirstName,
+      lastName: nextLastName,
+      fullName
+    };
+    if (this.useDb) {
+      const { data } = await this.supabase!
+        .from("users")
+        .update(payload)
+        .eq("id", userId)
+        .select("*")
+        .single();
+      if (!data) {
+        throw new NotFoundException("Utente non trovato");
+      }
+      return data as User;
+    }
+    Object.assign(user, payload);
+    return user;
+  }
+
+  async updateUserManager(userId: string, managerId?: string): Promise<User> {
+    if (managerId && managerId === userId) {
+      throw new BadRequestException("Un utente non puo essere manager di se stesso");
+    }
+    return this.updateUser(userId, { managerId });
+  }
+
   listRoles(): unknown[] {
     return this.roles;
   }
@@ -141,7 +288,77 @@ export class HrDataStore {
     return employee?.managerId === managerId;
   }
 
+  private async computeClockState(userId: string, date: string): Promise<{
+    hasOpenClockIn: boolean;
+    nextType: "clock_in" | "clock_out";
+    todayEntries: TimeEntry[];
+    minutesWorked: number;
+    dailyTargetSeconds: number;
+    remainingSeconds: number;
+  }> {
+    const todayEntries = (await this.listTimeEntries(userId, date)).sort((a, b) => a.at.localeCompare(b.at));
+    let openClockInAt: TimeEntry | null = null;
+    for (const item of todayEntries) {
+      if (item.type === "clock_in" && !openClockInAt) {
+        openClockInAt = item;
+      } else if (item.type === "clock_out" && openClockInAt) {
+        openClockInAt = null;
+      }
+    }
+    const minutesWorked = todayEntries.reduce((acc, curr, index) => {
+      if (curr.type === "clock_in") {
+        const out = todayEntries[index + 1];
+        if (out?.type === "clock_out") {
+          const delta =
+            (new Date(out.at).getTime() - new Date(curr.at).getTime()) / (1000 * 60);
+          return acc + Math.max(0, Math.floor(delta));
+        }
+      }
+      return acc;
+    }, 0);
+    const user = await this.getUser(userId);
+    const dailyTargetSeconds = user.dailyTargetSeconds ?? 28800;
+    const remainingSeconds = Math.max(0, dailyTargetSeconds - minutesWorked * 60);
+    return {
+      hasOpenClockIn: Boolean(openClockInAt),
+      nextType: openClockInAt ? "clock_out" : "clock_in",
+      todayEntries,
+      minutesWorked,
+      dailyTargetSeconds,
+      remainingSeconds
+    };
+  }
+
+  async getClockStatus(userId: string, date: string): Promise<{
+    date: string;
+    hasOpenClockIn: boolean;
+    nextType: "clock_in" | "clock_out";
+    entriesCount: number;
+    minutesWorked: number;
+    dailyTargetSeconds: number;
+    remainingSeconds: number;
+  }> {
+    const state = await this.computeClockState(userId, date);
+    return {
+      date,
+      hasOpenClockIn: state.hasOpenClockIn,
+      nextType: state.nextType,
+      entriesCount: state.todayEntries.length,
+      minutesWorked: state.minutesWorked,
+      dailyTargetSeconds: state.dailyTargetSeconds,
+      remainingSeconds: state.remainingSeconds
+    };
+  }
+
   async addTimeEntry(userId: string, type: "clock_in" | "clock_out", at: string): Promise<TimeEntry> {
+    const day = at.slice(0, 10);
+    const clockState = await this.computeClockState(userId, day);
+    if (clockState.nextType !== type) {
+      if (type === "clock_in") {
+        throw new BadRequestException("Entrata gia registrata, devi timbrare uscita");
+      }
+      throw new BadRequestException("Devi prima timbrare entrata");
+    }
     const entry: TimeEntry = {
       id: `te-${Date.now()}`,
       userId,
@@ -150,28 +367,40 @@ export class HrDataStore {
     };
     if (this.useDb) {
       await this.supabase!.from("time_entries").insert(entry);
-      await this.refreshSummary(userId, at.slice(0, 10));
+      await this.refreshSummary(userId, day);
       return entry;
     }
     this.timeEntries.push(entry);
-    await this.refreshSummary(userId, at.slice(0, 10));
+    await this.refreshSummary(userId, day);
     return entry;
   }
 
-  async listTimeEntries(userId: string): Promise<TimeEntry[]> {
+  async listTimeEntries(userId: string, date?: string): Promise<TimeEntry[]> {
     if (this.useDb) {
-      const { data } = await this.supabase!.from("time_entries").select("*").eq("userId", userId);
-      return (data as TimeEntry[]) ?? [];
+      let query = this.supabase!.from("time_entries").select("*").eq("userId", userId);
+      if (date) {
+        query = query.like("at", `${date}%`);
+      }
+      const { data } = await query;
+      return ((data as TimeEntry[]) ?? []).sort((a, b) => b.at.localeCompare(a.at));
     }
-    return this.timeEntries.filter((item) => item.userId === userId);
+    return this.timeEntries
+      .filter((item) => item.userId === userId && (!date || item.at.startsWith(date)))
+      .sort((a, b) => b.at.localeCompare(a.at));
   }
 
-  async listWorkdaySummary(userId: string): Promise<WorkdaySummary[]> {
+  async listWorkdaySummary(userId: string, date?: string): Promise<WorkdaySummary[]> {
     if (this.useDb) {
-      const { data } = await this.supabase!.from("workday_summaries").select("*").eq("userId", userId);
-      return (data as WorkdaySummary[]) ?? [];
+      let query = this.supabase!.from("workday_summaries").select("*").eq("userId", userId);
+      if (date) {
+        query = query.eq("date", date);
+      }
+      const { data } = await query;
+      return ((data as WorkdaySummary[]) ?? []).sort((a, b) => b.date.localeCompare(a.date));
     }
-    return this.workdaySummaries.filter((item) => item.userId === userId);
+    return this.workdaySummaries
+      .filter((item) => item.userId === userId && (!date || item.date === date))
+      .sort((a, b) => b.date.localeCompare(a.date));
   }
 
   private async refreshSummary(userId: string, date: string): Promise<void> {
@@ -248,6 +477,11 @@ export class HrDataStore {
   }
 
   async createLeavePlan(input: Omit<LeavePlan, "id" | "status" | "version">): Promise<LeavePlan> {
+    const requestedDays = this.countCalendarDays(input.startDate, input.endDate);
+    const balance = await this.getLeaveBalance(input.userId, Number(input.startDate.slice(0, 4)));
+    if (requestedDays > balance.residualDays) {
+      throw new BadRequestException("Ferie insufficienti: riduci i giorni richiesti");
+    }
     const leave: LeavePlan = {
       id: `lv-${Date.now()}`,
       status: "pending",
@@ -278,6 +512,13 @@ export class HrDataStore {
   async updateLeavePlan(leaveId: string, startDate: string, endDate: string): Promise<LeavePlan> {
     const leave = await this.getLeave(leaveId);
     if (!leave) throw new NotFoundException("Piano ferie non trovato");
+    const year = Number(startDate.slice(0, 4));
+    const requestedDays = this.countCalendarDays(startDate, endDate);
+    const balance = await this.getLeaveBalance(leave.userId, year);
+    const previousDays = leave.status === "approved" ? this.countCalendarDays(leave.startDate, leave.endDate) : 0;
+    if (requestedDays > balance.residualDays + previousDays) {
+      throw new BadRequestException("Ferie insufficienti per aggiornare questa richiesta");
+    }
     leave.startDate = startDate;
     leave.endDate = endDate;
     leave.version += 1;
@@ -318,6 +559,29 @@ export class HrDataStore {
       requestedBy: leave.userId,
       approverId,
       status: "approved",
+      at: new Date().toISOString()
+    } as ApprovalRecord;
+    if (this.useDb) {
+      await this.supabase!.from("approvals").insert(approval);
+    } else {
+      this.approvals.push(approval);
+    }
+    return leave;
+  }
+
+  async rejectLeave(leaveId: string, approverId: string): Promise<LeavePlan> {
+    const leave = await this.getLeave(leaveId);
+    leave.status = "rejected";
+    if (this.useDb) {
+      await this.supabase!.from("leave_plans").update({ status: "rejected" }).eq("id", leaveId);
+    }
+    const approval = {
+      id: `ap-${Date.now()}`,
+      entityId: leave.id,
+      type: "leave",
+      requestedBy: leave.userId,
+      approverId,
+      status: "rejected",
       at: new Date().toISOString()
     } as ApprovalRecord;
     if (this.useDb) {
@@ -385,6 +649,29 @@ export class HrDataStore {
       requestedBy: sickness.userId,
       approverId,
       status: "approved",
+      at: new Date().toISOString()
+    } as ApprovalRecord;
+    if (this.useDb) {
+      await this.supabase!.from("approvals").insert(approval);
+    } else {
+      this.approvals.push(approval);
+    }
+    return sickness;
+  }
+
+  async rejectSickness(id: string, approverId: string): Promise<SicknessEvent> {
+    const sickness = await this.getSickness(id);
+    sickness.status = "rejected";
+    if (this.useDb) {
+      await this.supabase!.from("sickness_events").update({ status: "rejected" }).eq("id", id);
+    }
+    const approval = {
+      id: `ap-${Date.now()}`,
+      entityId: sickness.id,
+      type: "sickness",
+      requestedBy: sickness.userId,
+      approverId,
+      status: "rejected",
       at: new Date().toISOString()
     } as ApprovalRecord;
     if (this.useDb) {
@@ -526,10 +813,98 @@ export class HrDataStore {
     return this.payslips.filter((item) => item.userId === target);
   }
 
+  async listApprovalsForUser(
+    requesterId: string,
+    status?: "pending" | "approved" | "rejected"
+  ): Promise<ApprovalView[]> {
+    const requester = await this.getUser(requesterId);
+    const subordinates = await this.listUsersByManager(requesterId);
+    const visibleUserIds = new Set<string>([requesterId, ...subordinates.map((item) => item.id)]);
+    const allApprovals = this.useDb
+      ? (((await this.supabase!.from("approvals").select("*")).data ?? []) as ApprovalRecord[])
+      : this.approvals;
+    return allApprovals
+      .filter((item) => requester.role === "admin" || visibleUserIds.has(item.requestedBy))
+      .filter((item) => (status ? item.status === status : true))
+      .sort((a, b) => b.at.localeCompare(a.at));
+  }
+
+  async approveByApprovalId(approvalId: string, approverId: string): Promise<ApprovalView> {
+    const approvals = await this.listApprovalsForUser(approverId);
+    const approval = approvals.find((item) => item.id === approvalId);
+    if (!approval) {
+      throw new NotFoundException("Autorizzazione non trovata");
+    }
+    if (approval.type === "leave") {
+      await this.approveLeave(approval.entityId, approverId);
+    } else {
+      await this.approveSickness(approval.entityId, approverId);
+    }
+    return {
+      ...approval,
+      status: "approved",
+      approverId,
+      at: new Date().toISOString()
+    };
+  }
+
+  async rejectByApprovalId(approvalId: string, approverId: string): Promise<ApprovalView> {
+    const approvals = await this.listApprovalsForUser(approverId);
+    const approval = approvals.find((item) => item.id === approvalId);
+    if (!approval) {
+      throw new NotFoundException("Autorizzazione non trovata");
+    }
+    if (approval.type === "leave") {
+      await this.rejectLeave(approval.entityId, approverId);
+    } else {
+      await this.rejectSickness(approval.entityId, approverId);
+    }
+    return {
+      ...approval,
+      status: "rejected",
+      approverId,
+      at: new Date().toISOString()
+    };
+  }
+
+  private countCalendarDays(startDate: string, endDate: string): number {
+    const start = new Date(`${startDate}T00:00:00.000Z`).getTime();
+    const end = new Date(`${endDate}T00:00:00.000Z`).getTime();
+    if (end < start) {
+      throw new BadRequestException("Intervallo date non valido");
+    }
+    return Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+  }
+
+  async getLeaveBalance(userId: string, year: number): Promise<LeaveBalance> {
+    const user = await this.getUser(userId);
+    const allocatedDays = user.vacationAllowanceDays ?? 22;
+    const leaves = await this.listLeave(userId);
+    const usedDays = leaves
+      .filter((item) => item.status === "approved")
+      .filter((item) => Number(item.startDate.slice(0, 4)) === year)
+      .reduce((acc, item) => acc + this.countCalendarDays(item.startDate, item.endDate), 0);
+    return {
+      userId,
+      year,
+      allocatedDays,
+      usedDays,
+      residualDays: Math.max(0, allocatedDays - usedDays)
+    };
+  }
+
+  async setLeaveAllowance(userId: string, allocatedDays: number): Promise<LeaveBalance> {
+    if (allocatedDays < 0 || allocatedDays > 120) {
+      throw new BadRequestException("Valore ferie standard non valido");
+    }
+    await this.updateUser(userId, { vacationAllowanceDays: allocatedDays });
+    return this.getLeaveBalance(userId, new Date().getUTCFullYear());
+  }
+
   private async countLeaveDays(userId: string, period: string): Promise<number> {
     const month = period.slice(0, 7);
     const leaves = await this.listLeave(userId);
-    return leaves.filter((item) => item.startDate.startsWith(month))
+    return leaves.filter((item) => item.status === "approved" && item.startDate.startsWith(month))
       .length;
   }
 

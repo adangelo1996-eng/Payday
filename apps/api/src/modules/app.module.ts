@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { APP_INTERCEPTOR } from "@nestjs/core";
+import { ApprovalsController } from "./approvals.controller";
 import { AttendanceController } from "./attendance.controller";
 import { AuditInterceptor } from "./audit.interceptor";
 import { AuthController } from "./auth.controller";
@@ -16,6 +17,7 @@ import { UserController } from "./user.controller";
     AuthController,
     UserController,
     AttendanceController,
+    ApprovalsController,
     LeaveController,
     SicknessController,
     OrgController,

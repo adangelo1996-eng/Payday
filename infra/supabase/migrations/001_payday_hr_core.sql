@@ -67,7 +67,25 @@ create table if not exists payslips (
   "pdfUrl" text not null
 );
 
+alter table users add column if not exists "firstName" text null;
+alter table users add column if not exists "lastName" text null;
+alter table users add column if not exists "dailyTargetSeconds" integer not null default 28800;
+alter table users add column if not exists "vacationAllowanceDays" integer not null default 22;
+alter table users add column if not exists "birthDate" text null;
+alter table users add column if not exists phone text null;
+alter table users add column if not exists address text null;
+
+create table if not exists leave_balances (
+  "userId" text not null references users(id) on delete cascade,
+  year integer not null,
+  "allocatedDays" integer not null,
+  "usedDays" integer not null default 0,
+  "residualDays" integer not null,
+  primary key ("userId", year)
+);
+
 create index if not exists idx_time_entries_userid on time_entries ("userId");
 create index if not exists idx_leave_plans_userid on leave_plans ("userId");
 create index if not exists idx_sickness_events_userid on sickness_events ("userId");
 create index if not exists idx_payslips_userid on payslips ("userId");
+create index if not exists idx_approvals_requestedby on approvals ("requestedBy");

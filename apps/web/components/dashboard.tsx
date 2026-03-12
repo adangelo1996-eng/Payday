@@ -5,13 +5,19 @@ import { Calendar, Clock3, Workflow } from "lucide-react";
 
 interface Props {
   todayEntriesCount: number;
+  leaveResidualDays: number;
+  pendingWorkflowCount: number;
 }
 
-export function Dashboard({ todayEntriesCount }: Props): React.JSX.Element {
+export function Dashboard({
+  todayEntriesCount,
+  leaveResidualDays,
+  pendingWorkflowCount
+}: Props): React.JSX.Element {
   const cards = [
     { title: "Timbrature oggi", value: String(todayEntriesCount), icon: Clock3 },
-    { title: "Ferie residue", value: "14 gg", icon: Calendar },
-    { title: "Workflow in attesa", value: "3", icon: Workflow }
+    { title: "Ferie residue", value: `${leaveResidualDays} gg`, icon: Calendar },
+    { title: "Workflow in attesa", value: String(pendingWorkflowCount), icon: Workflow }
   ];
 
   return (

@@ -2,9 +2,16 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   role: "admin" | "manager_controllo_gestione" | "employee";
   managerId?: string;
   companyId: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface TimeEntry {
@@ -30,6 +37,14 @@ export interface LeavePlan {
   version: number;
 }
 
+export interface LeaveBalance {
+  userId: string;
+  year: number;
+  allocatedDays: number;
+  usedDays: number;
+  residualDays: number;
+}
+
 export interface SicknessEvent {
   id: string;
   userId: string;
@@ -53,6 +68,16 @@ export interface Payslip {
   netSalary: number;
   lines: PayslipLine[];
   pdfUrl: string;
+}
+
+export interface ApprovalView {
+  id: string;
+  entityId: string;
+  type: "leave" | "sickness";
+  requestedBy: string;
+  approverId?: string;
+  status: "pending" | "approved" | "rejected";
+  at: string;
 }
 
 export interface SwissTaxProfile {

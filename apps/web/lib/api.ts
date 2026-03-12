@@ -15,9 +15,16 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   role: UserRole;
   managerId?: string;
   companyId: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
 }
 
 export interface OrgNode {
@@ -48,6 +55,69 @@ export interface WorkdaySummary {
   date: string;
   minutesWorked: number;
   mode: "office" | "smartworking";
+}
+
+export interface AttendanceStatus {
+  date: string;
+  hasOpenClockIn: boolean;
+  nextType: "clock_in" | "clock_out";
+  entriesCount: number;
+  minutesWorked: number;
+  dailyTargetSeconds: number;
+  remainingSeconds: number;
+}
+
+export interface LeavePlan {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  status: "draft" | "pending" | "approved" | "rejected";
+  version: number;
+}
+
+export interface LeaveBalance {
+  userId: string;
+  year: number;
+  allocatedDays: number;
+  usedDays: number;
+  residualDays: number;
+}
+
+export interface ApprovalItem {
+  id: string;
+  entityId: string;
+  type: "leave" | "sickness";
+  requestedBy: string;
+  approverId?: string;
+  status: "pending" | "approved" | "rejected";
+  at: string;
+}
+
+export interface CreateUserPayload {
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  managerId?: string;
+  companyId: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface UpdateUserPayload {
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  role?: UserRole;
+  managerId?: string;
+  dailyTargetSeconds?: number;
+  vacationAllowanceDays?: number;
+  birthDate?: string;
+  phone?: string;
+  address?: string;
 }
 
 interface ApiErrorPayload {
@@ -100,12 +170,18 @@ export async function login(email: string, password: string): Promise<{ token: s
 }
 
 export async function fetchCurrentUser(token: string): Promise<SessionUser> {
-  const cached = getSessionUser();
-  if (!cached) {
-    throw new Error("Sessione non disponibile");
+  const response = await fetch(buildApiUrl("/users/me"), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    const cached = getSessionUser();
+    if (cached) {
+      return cached;
+    }
+    await parseError(response);
   }
-
-  return cached;
+  return (await response.json()) as SessionUser;
 }
 
 export async function fetchPayslips(token: string): Promise<Payslip[]> {
@@ -128,6 +204,30 @@ export async function fetchUsers(token: string): Promise<User[]> {
     await parseError(response);
   }
   return (await response.json()) as User[];
+}
+
+export async function createUser(token: string, payload: CreateUserPayload): Promise<User> {
+  const response = await fetch(buildApiUrl("/users"), {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as User;
+}
+
+export async function updateUser(token: string, userId: string, payload: UpdateUserPayload): Promise<User> {
+  const response = await fetch(buildApiUrl(`/users/${userId}`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as User;
 }
 
 export async function fetchOrgChart(token: string): Promise<OrgChartResponse> {
@@ -153,8 +253,9 @@ export async function clock(token: string, type: "clock_in" | "clock_out"): Prom
   return (await response.json()) as TimeEntry;
 }
 
-export async function fetchAttendanceEntries(token: string): Promise<TimeEntry[]> {
-  const response = await fetch(buildApiUrl("/attendance/entries"), {
+export async function fetchAttendanceEntries(token: string, date?: string): Promise<TimeEntry[]> {
+  const search = date ? `?date=${encodeURIComponent(date)}` : "";
+  const response = await fetch(buildApiUrl(`/attendance/entries${search}`), {
     method: "GET",
     headers: getAuthHeaders(token)
   });
@@ -164,8 +265,9 @@ export async function fetchAttendanceEntries(token: string): Promise<TimeEntry[]
   return (await response.json()) as TimeEntry[];
 }
 
-export async function fetchAttendanceSummary(token: string): Promise<WorkdaySummary[]> {
-  const response = await fetch(buildApiUrl("/attendance/summary"), {
+export async function fetchAttendanceSummary(token: string, date?: string): Promise<WorkdaySummary[]> {
+  const search = date ? `?date=${encodeURIComponent(date)}` : "";
+  const response = await fetch(buildApiUrl(`/attendance/summary${search}`), {
     method: "GET",
     headers: getAuthHeaders(token)
   });
@@ -173,6 +275,93 @@ export async function fetchAttendanceSummary(token: string): Promise<WorkdaySumm
     await parseError(response);
   }
   return (await response.json()) as WorkdaySummary[];
+}
+
+export async function fetchAttendanceStatus(token: string, date?: string): Promise<AttendanceStatus> {
+  const search = date ? `?date=${encodeURIComponent(date)}` : "";
+  const response = await fetch(buildApiUrl(`/attendance/status${search}`), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as AttendanceStatus;
+}
+
+export async function createLeavePlan(
+  token: string,
+  payload: Pick<LeavePlan, "startDate" | "endDate">
+): Promise<LeavePlan> {
+  const response = await fetch(buildApiUrl("/leave/plan"), {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as LeavePlan;
+}
+
+export async function fetchLeaveBalance(token: string, year: number): Promise<LeaveBalance> {
+  const response = await fetch(buildApiUrl(`/leave/balance?year=${year}`), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as LeaveBalance;
+}
+
+export async function setLeaveAllowance(token: string, userId: string, allocatedDays: number): Promise<LeaveBalance> {
+  const response = await fetch(buildApiUrl(`/leave/balance/${userId}`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify({ allocatedDays })
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as LeaveBalance;
+}
+
+export async function fetchApprovals(
+  token: string,
+  status?: "pending" | "approved" | "rejected"
+): Promise<ApprovalItem[]> {
+  const search = status ? `?status=${status}` : "";
+  const response = await fetch(buildApiUrl(`/approvals${search}`), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as ApprovalItem[];
+}
+
+export async function approveApproval(token: string, approvalId: string): Promise<ApprovalItem> {
+  const response = await fetch(buildApiUrl(`/approvals/${approvalId}/approve`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as ApprovalItem;
+}
+
+export async function rejectApproval(token: string, approvalId: string): Promise<ApprovalItem> {
+  const response = await fetch(buildApiUrl(`/approvals/${approvalId}/reject`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as ApprovalItem;
 }
 
 export async function generatePayslip(
