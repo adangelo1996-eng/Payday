@@ -1,15 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import type {
-  ApprovalView,
-  LeaveBalance,
-  LeavePlan,
-  Payslip,
-  SicknessEvent,
-  TimeEntry,
-  User,
-  WorkdaySummary
-} from "./models";
+import type { ApprovalView, LeaveBalance, LeavePlan, Payslip, SicknessEvent, TimeEntry, User, WorkdaySummary, Role, CostCenter } from "./models";
 import { calculateSwissPayroll } from "./swiss-payroll.util";
 
 interface ApprovalRecord {
@@ -28,6 +19,8 @@ interface UserCreateInput {
   role: User["role"];
   managerId?: string;
   companyId: string;
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
@@ -41,6 +34,8 @@ interface UserUpdateInput {
   fullName?: string;
   managerId?: string;
   role?: User["role"];
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
@@ -62,12 +57,14 @@ export class HrDataStore {
   private readonly users: User[] = [
     {
       id: "u-admin",
-      email: "hr.admin@payday.local",
+      email: "admin@payday.ch",
       fullName: "HR Admin",
       firstName: "HR",
       lastName: "Admin",
       role: "admin",
       companyId: "comp-1",
+       roleId: "r1",
+       costCenterId: "cc-1",
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 26
     },
@@ -79,6 +76,8 @@ export class HrDataStore {
       lastName: "Controllo",
       role: "manager_controllo_gestione",
       companyId: "comp-1",
+       roleId: "r2",
+       costCenterId: "cc-1",
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 24
     },
@@ -91,12 +90,14 @@ export class HrDataStore {
       role: "employee",
       managerId: "u-manager",
       companyId: "comp-1",
+       roleId: "r3",
+       costCenterId: "cc-2",
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 22
     }
   ];
 
-  private readonly roles = [
+  private roles: Role[] = [
     { id: "r1", name: "admin", permissions: ["*"] },
     {
       id: "r2",
@@ -117,6 +118,20 @@ export class HrDataStore {
   private readonly approvals: ApprovalRecord[] = [];
   private readonly payslips: Payslip[] = [];
   private readonly delegations: Delegation[] = [];
+  private costCenters: CostCenter[] = [
+    {
+      id: "cc-1",
+      code: "HR",
+      name: "Risorse Umane",
+      description: "Centro di costo HR"
+    },
+    {
+      id: "cc-2",
+      code: "FIN",
+      name: "Finanza",
+      description: "Centro di costo Finance"
+    }
+  ];
 
   constructor() {
     const url = process.env.SUPABASE_URL;
@@ -213,6 +228,8 @@ export class HrDataStore {
       role: input.role,
       managerId: input.managerId,
       companyId: input.companyId,
+      roleId: input.roleId,
+      costCenterId: input.costCenterId,
       dailyTargetSeconds: input.dailyTargetSeconds ?? 28800,
       vacationAllowanceDays: input.vacationAllowanceDays ?? 22,
       birthDate: input.birthDate,
@@ -262,8 +279,142 @@ export class HrDataStore {
     return this.updateUser(userId, { managerId });
   }
 
-  listRoles(): unknown[] {
+  listRoles(): Role[] {
     return this.roles;
+  }
+
+  createRole(input: { name: string; description?: string; permissions?: string[] }): Role {
+    const name = input.name.trim();
+    if (!name) {
+      throw new BadRequestException("Nome ruolo obbligatorio");
+    }
+    const existing = this.roles.find((role) => role.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      throw new BadRequestException("Ruolo gia esistente");
+    }
+    const role: Role = {
+      id: `r-${Date.now()}`,
+      name,
+      description: input.description,
+      permissions: input.permissions ?? []
+    };
+    this.roles.push(role);
+    return role;
+  }
+
+  updateRole(roleId: string, input: { name?: string; description?: string; permissions?: string[] }): Role {
+    const role = this.roles.find((item) => item.id === roleId);
+    if (!role) {
+      throw new NotFoundException("Ruolo non trovato");
+    }
+    if (input.name) {
+      const name = input.name.trim();
+      if (!name) {
+        throw new BadRequestException("Nome ruolo obbligatorio");
+      }
+      const duplicate = this.roles.find(
+        (item) => item.id !== roleId && item.name.toLowerCase() === name.toLowerCase()
+      );
+      if (duplicate) {
+        throw new BadRequestException("Esiste gia un ruolo con questo nome");
+      }
+      role.name = name;
+    }
+    if (input.description !== undefined) {
+      role.description = input.description;
+    }
+    if (input.permissions !== undefined) {
+      role.permissions = input.permissions;
+    }
+    return role;
+  }
+
+  deleteRole(roleId: string): Role {
+    const index = this.roles.findIndex((item) => item.id === roleId);
+    if (index === -1) {
+      throw new NotFoundException("Ruolo non trovato");
+    }
+    const role = this.roles[index];
+    if (role.name === "admin") {
+      throw new BadRequestException("Il ruolo admin non puo essere eliminato");
+    }
+    const remainingAdmin = this.roles.some(
+      (item, position) => position !== index && item.name === "admin"
+    );
+    if (!remainingAdmin) {
+      throw new BadRequestException("Deve esistere almeno un ruolo admin");
+    }
+    this.roles.splice(index, 1);
+    return role;
+  }
+
+  listCostCenters(): CostCenter[] {
+    return this.costCenters;
+  }
+
+  createCostCenter(input: { code: string; name: string; description?: string }): CostCenter {
+    const code = input.code.trim();
+    const name = input.name.trim();
+    if (!code || !name) {
+      throw new BadRequestException("Codice e nome centro di costo sono obbligatori");
+    }
+    const existing = this.costCenters.find(
+      (center) => center.code.toLowerCase() === code.toLowerCase()
+    );
+    if (existing) {
+      throw new BadRequestException("Esiste gia un centro di costo con questo codice");
+    }
+    const costCenter: CostCenter = {
+      id: `cc-${Date.now()}`,
+      code,
+      name,
+      description: input.description
+    };
+    this.costCenters.push(costCenter);
+    return costCenter;
+  }
+
+  updateCostCenter(
+    costCenterId: string,
+    input: { code?: string; name?: string; description?: string }
+  ): CostCenter {
+    const center = this.costCenters.find((item) => item.id === costCenterId);
+    if (!center) {
+      throw new NotFoundException("Centro di costo non trovato");
+    }
+    if (input.code) {
+      const code = input.code.trim();
+      if (!code) {
+        throw new BadRequestException("Codice centro di costo obbligatorio");
+      }
+      const duplicate = this.costCenters.find(
+        (item) => item.id !== costCenterId && item.code.toLowerCase() === code.toLowerCase()
+      );
+      if (duplicate) {
+        throw new BadRequestException("Esiste gia un centro di costo con questo codice");
+      }
+      center.code = code;
+    }
+    if (input.name) {
+      const name = input.name.trim();
+      if (!name) {
+        throw new BadRequestException("Nome centro di costo obbligatorio");
+      }
+      center.name = name;
+    }
+    if (input.description !== undefined) {
+      center.description = input.description;
+    }
+    return center;
+  }
+
+  deleteCostCenter(costCenterId: string): CostCenter {
+    const index = this.costCenters.findIndex((item) => item.id === costCenterId);
+    if (index === -1) {
+      throw new NotFoundException("Centro di costo non trovato");
+    }
+    const [removed] = this.costCenters.splice(index, 1);
+    return removed;
   }
 
   async assignRole(userId: string, role: User["role"]): Promise<User> {
@@ -823,10 +974,60 @@ export class HrDataStore {
     const allApprovals = this.useDb
       ? (((await this.supabase!.from("approvals").select("*")).data ?? []) as ApprovalRecord[])
       : this.approvals;
-    return allApprovals
+    const approvals = allApprovals
       .filter((item) => requester.role === "admin" || visibleUserIds.has(item.requestedBy))
       .filter((item) => (status ? item.status === status : true))
       .sort((a, b) => b.at.localeCompare(a.at));
+
+    const leavesById = new Map<string, LeavePlan>();
+    const sicknessById = new Map<string, SicknessEvent>();
+
+    if (this.useDb) {
+      const leaveIds = approvals.filter((item) => item.type === "leave").map((item) => item.entityId);
+      const sicknessIds = approvals.filter((item) => item.type === "sickness").map((item) => item.entityId);
+
+      if (leaveIds.length > 0) {
+        const { data } = await this.supabase!.from("leave_plans").select("*").in("id", leaveIds);
+        for (const row of (data ?? []) as LeavePlan[]) {
+          leavesById.set(row.id, row);
+        }
+      }
+
+      if (sicknessIds.length > 0) {
+        const { data } = await this.supabase!.from("sickness_events").select("*").in("id", sicknessIds);
+        for (const row of (data ?? []) as SicknessEvent[]) {
+          sicknessById.set(row.id, row);
+        }
+      }
+    } else {
+      for (const leave of this.leavePlans) {
+        leavesById.set(leave.id, leave);
+      }
+      for (const sickness of this.sicknessEvents) {
+        sicknessById.set(sickness.id, sickness);
+      }
+    }
+
+    const users = await this.listUsers();
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    return approvals.map((item) => {
+      const user = usersById.get(item.requestedBy);
+      const leave = item.type === "leave" ? leavesById.get(item.entityId) : undefined;
+      const sickness = item.type === "sickness" ? sicknessById.get(item.entityId) : undefined;
+      return {
+        id: item.id,
+        entityId: item.entityId,
+        type: item.type,
+        requestedBy: item.requestedBy,
+        approverId: item.approverId,
+        status: item.status,
+        at: item.at,
+        requesterName: user?.fullName,
+        startDate: leave?.startDate ?? sickness?.fromDate,
+        endDate: leave?.endDate ?? sickness?.toDate
+      };
+    });
   }
 
   async approveByApprovalId(approvalId: string, approverId: string): Promise<ApprovalView> {

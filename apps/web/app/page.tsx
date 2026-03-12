@@ -380,12 +380,17 @@ export default function HomePage(): React.JSX.Element {
       {user.role !== "employee" ? (
         <section className="card mt-6">
           <h2 className="text-xl font-semibold">Workflow team</h2>
+          <p className="mt-1 text-sm text-slate-400">
+            Per ogni richiesta di ferie visualizzi chiaramente il periodo richiesto e lo stato.
+          </p>
           <div className="mt-4 space-y-2 text-sm">
             {approvals.length === 0 ? <p className="text-slate-400">Nessuna autorizzazione visibile.</p> : null}
             {approvals.slice(0, 8).map((item) => (
               <div key={item.id} className="rounded-lg border border-slate-700 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium">{item.type === "leave" ? "Ferie" : "Malattia"}</span>
+                  <span className="font-medium">
+                    {item.type === "leave" ? "Ferie" : "Malattia"} · {item.requesterName ?? item.requestedBy}
+                  </span>
                   <span
                     className={`rounded px-2 py-1 text-xs ${
                       item.status === "approved"
@@ -398,7 +403,15 @@ export default function HomePage(): React.JSX.Element {
                     {item.status}
                   </span>
                 </div>
-                <p className="mt-1 text-slate-400">{new Date(item.at).toLocaleString("it-CH")}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Richiesta il {new Date(item.at).toLocaleString("it-CH")}
+                </p>
+                {item.startDate && item.endDate ? (
+                  <p className="mt-1 text-xs text-slate-300">
+                    Periodo: <span className="font-medium">{item.startDate}</span> →{" "}
+                    <span className="font-medium">{item.endDate}</span>
+                  </p>
+                ) : null}
                 {item.status === "pending" ? (
                   <div className="mt-3 flex gap-2">
                     <Button

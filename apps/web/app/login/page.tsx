@@ -69,7 +69,7 @@ export default function LoginPage(): React.JSX.Element {
               </Button>
             </form>
             <p className="mt-4 text-xs text-slate-500">
-              Demo: hr.admin@payday.local / AdminPayday123! - manager.controllo@payday.local / ManagerPayday123! -
+              Demo: admin@payday.ch / PasswordAdmin - manager.controllo@payday.local / ManagerPayday123! -
               dipendente.demo@payday.local / EmployeePayday123!
             </p>
           </CardContent>

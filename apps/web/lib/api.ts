@@ -20,6 +20,8 @@ export interface User {
   role: UserRole;
   managerId?: string;
   companyId: string;
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
@@ -92,6 +94,9 @@ export interface ApprovalItem {
   approverId?: string;
   status: "pending" | "approved" | "rejected";
   at: string;
+  startDate?: string;
+  endDate?: string;
+  requesterName?: string;
 }
 
 export interface CreateUserPayload {
@@ -100,6 +105,8 @@ export interface CreateUserPayload {
   role: UserRole;
   managerId?: string;
   companyId: string;
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
@@ -113,6 +120,8 @@ export interface UpdateUserPayload {
   fullName?: string;
   role?: UserRole;
   managerId?: string;
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;

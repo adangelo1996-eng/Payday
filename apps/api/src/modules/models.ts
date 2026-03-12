@@ -7,11 +7,27 @@ export interface User {
   role: "admin" | "manager_controllo_gestione" | "employee";
   managerId?: string;
   companyId: string;
+  roleId?: string;
+  costCenterId?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
   address?: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
 }
 
 export interface TimeEntry {
@@ -78,6 +94,9 @@ export interface ApprovalView {
   approverId?: string;
   status: "pending" | "approved" | "rejected";
   at: string;
+  startDate?: string;
+  endDate?: string;
+  requesterName?: string;
 }
 
 export interface SwissTaxProfile {

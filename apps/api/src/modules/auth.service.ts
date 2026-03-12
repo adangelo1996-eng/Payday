@@ -42,7 +42,7 @@ export class AuthService {
 
   private getPasswordForRole(role: AuthRole): string {
     if (role === "admin") {
-      return process.env.AUTH_ADMIN_PASSWORD ?? "AdminPayday123!";
+      return process.env.AUTH_ADMIN_PASSWORD ?? "PasswordAdmin";
     }
     if (role === "manager_controllo_gestione") {
       return process.env.AUTH_MANAGER_PASSWORD ?? "ManagerPayday123!";

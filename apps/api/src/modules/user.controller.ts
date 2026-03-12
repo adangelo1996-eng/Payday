@@ -29,6 +29,14 @@ class CreateUserDto {
   companyId!: string;
 
   @IsOptional()
+  @IsString()
+  roleId?: string;
+
+  @IsOptional()
+  @IsString()
+  costCenterId?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   @Max(86400)
@@ -97,6 +105,14 @@ class UpdateUserDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @IsOptional()
+  @IsString()
+  roleId?: string;
+
+  @IsOptional()
+  @IsString()
+  costCenterId?: string;
 }
 
 @Controller("users")
