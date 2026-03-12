@@ -124,6 +124,29 @@ interface ApiErrorPayload {
   message?: string | string[];
 }
 
+function debugAgentLog(
+  hypothesisId: "H1" | "H2" | "H3" | "H4" | "H5",
+  location: string,
+  message: string,
+  data: Record<string, unknown>
+): void {
+  // #region agent log
+  fetch("http://127.0.0.1:7610/ingest/da1f9aea-fe4e-4a64-8920-44501363a538", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "ad76a1" },
+    body: JSON.stringify({
+      sessionId: "ad76a1",
+      runId: "run1",
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
+}
+
 function getApiBaseUrl(): string {
   const env = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   const origin = env && env.length > 0 ? env : "http://localhost:4000";
@@ -158,15 +181,32 @@ async function parseError(response: Response): Promise<never> {
 }
 
 export async function login(email: string, password: string): Promise<{ token: string; user: SessionUser }> {
-  const response = await fetch(buildApiUrl("/auth/login"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+  const url = buildApiUrl("/auth/login");
+  debugAgentLog("H1", "apps/web/lib/api.ts:183", "Login request configured", {
+    requestUrl: url,
+    frontendOrigin: typeof window !== "undefined" ? window.location.origin : "server",
+    apiBaseEnv: process.env.NEXT_PUBLIC_API_BASE_URL ?? null
   });
-  if (!response.ok) {
-    await parseError(response);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    debugAgentLog("H5", "apps/web/lib/api.ts:194", "Login fetch resolved", {
+      status: response.status,
+      ok: response.ok
+    });
+    if (!response.ok) {
+      await parseError(response);
+    }
+    return (await response.json()) as { token: string; user: SessionUser };
+  } catch (error) {
+    debugAgentLog("H3", "apps/web/lib/api.ts:203", "Login fetch threw before response", {
+      errorMessage: error instanceof Error ? error.message : "unknown"
+    });
+    throw error;
   }
-  return (await response.json()) as { token: string; user: SessionUser };
 }
 
 export async function fetchCurrentUser(token: string): Promise<SessionUser> {
