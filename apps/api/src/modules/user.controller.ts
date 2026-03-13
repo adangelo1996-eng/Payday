@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from "class-validator";
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from "class-validator";
 import { CurrentAuth, RequireRole, RoleGuard } from "./auth";
 import { HrDataStore } from "./hr-data.store";
 
@@ -37,10 +37,34 @@ class CreateUserDto {
   costCenterId?: string;
 
   @IsOptional()
-  @IsInt()
+  @IsNumber()
   @Min(1)
-  @Max(86400)
-  dailyTargetSeconds?: number;
+  @Max(80)
+  weeklyContractHours?: number;
+
+  @IsOptional()
+  @IsString()
+  contractType?: string;
+
+  @IsOptional()
+  @IsString()
+  avsNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  iban?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  bicSwift?: string;
+
+  @IsOptional()
+  @IsString()
+  accountHolder?: string;
 
   @IsOptional()
   @IsInt()
@@ -83,10 +107,34 @@ class UpdateUserDto {
   managerId?: string;
 
   @IsOptional()
-  @IsInt()
+  @IsNumber()
   @Min(1)
-  @Max(86400)
-  dailyTargetSeconds?: number;
+  @Max(80)
+  weeklyContractHours?: number;
+
+  @IsOptional()
+  @IsString()
+  contractType?: string;
+
+  @IsOptional()
+  @IsString()
+  avsNumber?: string;
+
+  @IsOptional()
+  @IsString()
+  iban?: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  bicSwift?: string;
+
+  @IsOptional()
+  @IsString()
+  accountHolder?: string;
 
   @IsOptional()
   @IsInt()

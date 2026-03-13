@@ -9,6 +9,15 @@ export interface SessionUser {
   role: UserRole;
   managerId?: string;
   companyId?: string;
+  roleId?: string;
+  costCenterId?: string;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
 }

@@ -8,11 +8,15 @@ import { GlassCard } from "@/components/glass-card";
 import { adminStrings } from "./strings";
 import {
   createUser,
+  fetchAdminCostCenters,
+  fetchAdminRoles,
   fetchCurrentUser,
   fetchUsers,
   setLeaveAllowance,
   updateUser,
+  type CostCenter,
   type CreateUserPayload,
+  type Role,
   type User
 } from "@/lib/api";
 import { clearSession, getToken, type SessionUser } from "@/lib/auth-session";
@@ -22,7 +26,7 @@ const DEFAULT_NEW_USER: CreateUserPayload = {
   lastName: "",
   role: "employee",
   companyId: "comp-1",
-  dailyTargetSeconds: 28800,
+  weeklyContractHours: 40,
   vacationAllowanceDays: 22
 };
 
@@ -31,6 +35,8 @@ export default function AdminPage(): React.JSX.Element {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [newUser, setNewUser] = useState<CreateUserPayload>(DEFAULT_NEW_USER);
   const [selectedUserId, setSelectedUserId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -55,9 +61,15 @@ export default function AdminPage(): React.JSX.Element {
           router.replace("/");
           return;
         }
-        const allUsers = await fetchUsers(tokenValue);
+        const [allUsers, allRoles, allCostCenters] = await Promise.all([
+          fetchUsers(tokenValue),
+          fetchAdminRoles(tokenValue),
+          fetchAdminCostCenters(tokenValue)
+        ]);
         setUser(currentUser);
         setUsers(allUsers);
+        setRoles(allRoles);
+        setCostCenters(allCostCenters);
         setSelectedUserId(allUsers[0]?.id ?? "");
       } catch (loadError) {
         clearSession();
@@ -81,6 +93,10 @@ export default function AdminPage(): React.JSX.Element {
       setSelectedUserId(allUsers[0].id);
     }
   }
+
+  const selectedRoleName = selectedUser
+    ? roles.find((role) => role.id === selectedUser.roleId)?.name ?? selectedUser.role
+    : "";
 
   async function onCreateUser(): Promise<void> {
     if (!token) {
@@ -111,7 +127,15 @@ export default function AdminPage(): React.JSX.Element {
         lastName: selectedUser.lastName,
         role: selectedUser.role,
         managerId: selectedUser.managerId,
-        dailyTargetSeconds: selectedUser.dailyTargetSeconds,
+        roleId: selectedUser.roleId,
+        costCenterId: selectedUser.costCenterId,
+        contractType: selectedUser.contractType,
+        weeklyContractHours: selectedUser.weeklyContractHours,
+        avsNumber: selectedUser.avsNumber,
+        iban: selectedUser.iban,
+        bankName: selectedUser.bankName,
+        bicSwift: selectedUser.bicSwift,
+        accountHolder: selectedUser.accountHolder,
         vacationAllowanceDays: selectedUser.vacationAllowanceDays,
         birthDate: selectedUser.birthDate,
         phone: selectedUser.phone,
@@ -265,6 +289,57 @@ export default function AdminPage(): React.JSX.Element {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Ruolo organizzativo</span>
+              <select
+                value={selectedUser ? selectedUser.roleId ?? "" : newUser.roleId ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  const roleName = roles.find((role) => role.id === value)?.name;
+                  const mappedRole =
+                    roleName === "admin" || roleName === "manager_controllo_gestione" || roleName === "employee"
+                      ? roleName
+                      : undefined;
+                  if (selectedUser) {
+                    updateSelectedUser({ roleId: value, ...(mappedRole ? { role: mappedRole } : {}) });
+                  } else {
+                    setNewUser((current) => ({
+                      ...current,
+                      roleId: value,
+                      ...(mappedRole ? { role: mappedRole } : {})
+                    }));
+                  }
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              >
+                <option value="">Nessun ruolo organizzativo</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Centro di costo</span>
+              <select
+                value={selectedUser ? selectedUser.costCenterId ?? "" : newUser.costCenterId ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ costCenterId: value })
+                    : setNewUser((current) => ({ ...current, costCenterId: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              >
+                <option value="">Nessun centro di costo</option>
+                {costCenters.map((center) => (
+                  <option key={center.id} value={center.id}>
+                    {center.code} - {center.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
               <span className="text-slate-300">Manager</span>
               <select
                 value={selectedUser ? selectedUser.managerId ?? "" : newUser.managerId ?? ""}
@@ -285,21 +360,48 @@ export default function AdminPage(): React.JSX.Element {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-xs">
-              <span className="text-slate-300">Secondi giornata standard</span>
+              <span className="text-slate-300">Ore contrattuali settimanali</span>
               <input
                 type="number"
                 min={1}
-                max={86400}
+                max={80}
+                step={0.5}
                 value={
                   selectedUser
-                    ? selectedUser.dailyTargetSeconds ?? 28800
-                    : newUser.dailyTargetSeconds ?? 28800
+                    ? selectedUser.weeklyContractHours ?? 40
+                    : newUser.weeklyContractHours ?? 40
                 }
                 onChange={(event) => {
                   const value = Number(event.target.value);
                   selectedUser
-                    ? updateSelectedUser({ dailyTargetSeconds: value })
-                    : setNewUser((current) => ({ ...current, dailyTargetSeconds: value }));
+                    ? updateSelectedUser({ weeklyContractHours: value })
+                    : setNewUser((current) => ({ ...current, weeklyContractHours: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Tipo contratto</span>
+              <input
+                value={selectedUser ? selectedUser.contractType ?? "" : newUser.contractType ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ contractType: value })
+                    : setNewUser((current) => ({ ...current, contractType: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Numero AVS</span>
+              <input
+                value={selectedUser ? selectedUser.avsNumber ?? "" : newUser.avsNumber ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ avsNumber: value })
+                    : setNewUser((current) => ({ ...current, avsNumber: value }));
                 }}
                 className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
               />
@@ -320,6 +422,58 @@ export default function AdminPage(): React.JSX.Element {
                   selectedUser
                     ? updateSelectedUser({ vacationAllowanceDays: value })
                     : setNewUser((current) => ({ ...current, vacationAllowanceDays: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">IBAN</span>
+              <input
+                value={selectedUser ? selectedUser.iban ?? "" : newUser.iban ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ iban: value })
+                    : setNewUser((current) => ({ ...current, iban: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Banca</span>
+              <input
+                value={selectedUser ? selectedUser.bankName ?? "" : newUser.bankName ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ bankName: value })
+                    : setNewUser((current) => ({ ...current, bankName: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">BIC/SWIFT</span>
+              <input
+                value={selectedUser ? selectedUser.bicSwift ?? "" : newUser.bicSwift ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ bicSwift: value })
+                    : setNewUser((current) => ({ ...current, bicSwift: value }));
+                }}
+                className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="text-slate-300">Intestatario conto</span>
+              <input
+                value={selectedUser ? selectedUser.accountHolder ?? "" : newUser.accountHolder ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || undefined;
+                  selectedUser
+                    ? updateSelectedUser({ accountHolder: value })
+                    : setNewUser((current) => ({ ...current, accountHolder: value }));
                 }}
                 className="rounded-lg border border-slate-700/70 bg-slate-950/60 px-3 py-1.5 text-xs"
               />
@@ -377,7 +531,7 @@ export default function AdminPage(): React.JSX.Element {
               </Button>
             )}
             <span className="text-[11px] text-slate-400">
-              Admin: {user?.fullName} · Utenti totali: {users.length}
+              Admin: {user?.fullName} · Utenti: {users.length} · Ruolo: {selectedRoleName || "-"}
             </span>
           </div>
 

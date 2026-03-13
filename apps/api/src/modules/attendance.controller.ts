@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query } from "@nestjs/common";
-import { IsIn, IsISO8601, IsString } from "class-validator";
+import { IsIn, IsISO8601, IsOptional, IsString } from "class-validator";
 import { CurrentAuth } from "./auth";
 import { HrDataStore } from "./hr-data.store";
 
@@ -7,8 +7,19 @@ class ClockDto {
   @IsIn(["clock_in", "clock_out"])
   type!: "clock_in" | "clock_out";
 
+  @IsOptional()
   @IsISO8601()
-  at!: string;
+  at?: string;
+}
+
+class AggregateQueryDto {
+  @IsOptional()
+  @IsIn(["week", "month", "year"])
+  scope?: "week" | "month" | "year";
+
+  @IsOptional()
+  @IsString()
+  date?: string;
 }
 
 class WorkModeDto {
@@ -55,5 +66,14 @@ export class AttendanceController {
   async status(@CurrentAuth() auth: { userId: string }, @Query("date") date?: string): Promise<unknown> {
     const targetDate = date ?? new Date().toISOString().slice(0, 10);
     return this.store.getClockStatus(auth.userId, targetDate);
+  }
+
+  @Get("aggregates")
+  async aggregates(
+    @CurrentAuth() auth: { userId: string },
+    @Query() query: AggregateQueryDto
+  ): Promise<unknown> {
+    const targetDate = query.date ?? new Date().toISOString().slice(0, 10);
+    return this.store.getOvertimeAggregates(auth.userId, targetDate, query.scope);
   }
 }

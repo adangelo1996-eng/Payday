@@ -22,11 +22,32 @@ export interface User {
   companyId: string;
   roleId?: string;
   costCenterId?: string;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
   address?: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+}
+
+export interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
 }
 
 export interface OrgNode {
@@ -62,11 +83,22 @@ export interface WorkdaySummary {
 export interface AttendanceStatus {
   date: string;
   hasOpenClockIn: boolean;
+  isRunning: boolean;
   nextType: "clock_in" | "clock_out";
   entriesCount: number;
   minutesWorked: number;
+  workedSeconds: number;
+  overtimeSeconds: number;
   dailyTargetSeconds: number;
   remainingSeconds: number;
+  firstClockInAt?: string;
+}
+
+export interface AttendanceOvertimeAggregates {
+  referenceDate: string;
+  week: { overtimeSeconds: number; overtimeHours: number };
+  month: { overtimeSeconds: number; overtimeHours: number };
+  year: { overtimeSeconds: number; overtimeHours: number };
 }
 
 export interface LeavePlan {
@@ -107,7 +139,13 @@ export interface CreateUserPayload {
   companyId: string;
   roleId?: string;
   costCenterId?: string;
-  dailyTargetSeconds?: number;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
@@ -122,7 +160,13 @@ export interface UpdateUserPayload {
   managerId?: string;
   roleId?: string;
   costCenterId?: string;
-  dailyTargetSeconds?: number;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
@@ -294,7 +338,7 @@ export async function clock(token: string, type: "clock_in" | "clock_out"): Prom
   const response = await fetch(buildApiUrl("/attendance/clock"), {
     method: "POST",
     headers: getAuthHeaders(token),
-    body: JSON.stringify({ type, at: new Date().toISOString() })
+    body: JSON.stringify({ type })
   });
   if (!response.ok) {
     await parseError(response);
@@ -336,6 +380,127 @@ export async function fetchAttendanceStatus(token: string, date?: string): Promi
     await parseError(response);
   }
   return (await response.json()) as AttendanceStatus;
+}
+
+export async function fetchAttendanceOvertimeAggregates(
+  token: string,
+  date?: string
+): Promise<AttendanceOvertimeAggregates> {
+  const search = date ? `?date=${encodeURIComponent(date)}` : "";
+  const response = await fetch(buildApiUrl(`/attendance/aggregates${search}`), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as AttendanceOvertimeAggregates;
+}
+
+export async function fetchAdminRoles(token: string): Promise<Role[]> {
+  const response = await fetch(buildApiUrl("/admin/roles"), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as Role[];
+}
+
+export async function createAdminRole(
+  token: string,
+  payload: { name: string; description?: string; permissions?: string[] }
+): Promise<Role> {
+  const response = await fetch(buildApiUrl("/admin/roles"), {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as Role;
+}
+
+export async function updateAdminRole(
+  token: string,
+  roleId: string,
+  payload: { name?: string; description?: string; permissions?: string[] }
+): Promise<Role> {
+  const response = await fetch(buildApiUrl(`/admin/roles/${roleId}`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as Role;
+}
+
+export async function deleteAdminRole(token: string, roleId: string): Promise<Role> {
+  const response = await fetch(buildApiUrl(`/admin/roles/${roleId}`), {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as Role;
+}
+
+export async function fetchAdminCostCenters(token: string): Promise<CostCenter[]> {
+  const response = await fetch(buildApiUrl("/admin/cost-centers"), {
+    method: "GET",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as CostCenter[];
+}
+
+export async function createAdminCostCenter(
+  token: string,
+  payload: { code: string; name: string; description?: string }
+): Promise<CostCenter> {
+  const response = await fetch(buildApiUrl("/admin/cost-centers"), {
+    method: "POST",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as CostCenter;
+}
+
+export async function updateAdminCostCenter(
+  token: string,
+  costCenterId: string,
+  payload: { code?: string; name?: string; description?: string }
+): Promise<CostCenter> {
+  const response = await fetch(buildApiUrl(`/admin/cost-centers/${costCenterId}`), {
+    method: "PATCH",
+    headers: getAuthHeaders(token),
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as CostCenter;
+}
+
+export async function deleteAdminCostCenter(token: string, costCenterId: string): Promise<CostCenter> {
+  const response = await fetch(buildApiUrl(`/admin/cost-centers/${costCenterId}`), {
+    method: "DELETE",
+    headers: getAuthHeaders(token)
+  });
+  if (!response.ok) {
+    await parseError(response);
+  }
+  return (await response.json()) as CostCenter;
 }
 
 export async function createLeavePlan(

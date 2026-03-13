@@ -9,6 +9,13 @@ export interface User {
   companyId: string;
   roleId?: string;
   costCenterId?: string;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   dailyTargetSeconds?: number;
   vacationAllowanceDays?: number;
   birthDate?: string;
@@ -41,6 +48,8 @@ export interface WorkdaySummary {
   userId: string;
   date: string;
   minutesWorked: number;
+  workedSeconds?: number;
+  overtimeSeconds?: number;
   mode: "office" | "smartworking";
 }
 

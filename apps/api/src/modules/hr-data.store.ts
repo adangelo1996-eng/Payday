@@ -21,7 +21,13 @@ interface UserCreateInput {
   companyId: string;
   roleId?: string;
   costCenterId?: string;
-  dailyTargetSeconds?: number;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
@@ -36,7 +42,13 @@ interface UserUpdateInput {
   role?: User["role"];
   roleId?: string;
   costCenterId?: string;
-  dailyTargetSeconds?: number;
+  contractType?: string;
+  weeklyContractHours?: number;
+  avsNumber?: string;
+  iban?: string;
+  bankName?: string;
+  bicSwift?: string;
+  accountHolder?: string;
   vacationAllowanceDays?: number;
   birthDate?: string;
   phone?: string;
@@ -63,8 +75,9 @@ export class HrDataStore {
       lastName: "Admin",
       role: "admin",
       companyId: "comp-1",
-       roleId: "r1",
-       costCenterId: "cc-1",
+      roleId: "r1",
+      costCenterId: "cc-1",
+      weeklyContractHours: 40,
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 26
     },
@@ -76,8 +89,9 @@ export class HrDataStore {
       lastName: "Controllo",
       role: "manager_controllo_gestione",
       companyId: "comp-1",
-       roleId: "r2",
-       costCenterId: "cc-1",
+      roleId: "r2",
+      costCenterId: "cc-1",
+      weeklyContractHours: 40,
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 24
     },
@@ -90,8 +104,9 @@ export class HrDataStore {
       role: "employee",
       managerId: "u-manager",
       companyId: "comp-1",
-       roleId: "r3",
-       costCenterId: "cc-2",
+      roleId: "r3",
+      costCenterId: "cc-2",
+      weeklyContractHours: 40,
       dailyTargetSeconds: 28800,
       vacationAllowanceDays: 22
     }
@@ -147,12 +162,85 @@ export class HrDataStore {
 
   private async ensureSeedUsers(): Promise<void> {
     if (!this.useDb || this.seeded) return;
+    await this.ensureSeedReferenceData();
     const { data, error } = await this.supabase!.from("users").select("id").limit(1);
     if (error) return;
     if (!data || data.length === 0) {
       await this.supabase!.from("users").insert(this.users);
     }
     this.seeded = true;
+  }
+
+  private async ensureSeedReferenceData(): Promise<void> {
+    if (!this.useDb) return;
+    const rolesCount = await this.supabase!.from("roles").select("id", { count: "exact", head: true });
+    if (!rolesCount.error && (rolesCount.count ?? 0) === 0) {
+      await this.supabase!.from("roles").insert(this.roles);
+    }
+    const centersCount = await this.supabase!
+      .from("cost_centers")
+      .select("id", { count: "exact", head: true });
+    if (!centersCount.error && (centersCount.count ?? 0) === 0) {
+      await this.supabase!.from("cost_centers").insert(this.costCenters);
+    }
+  }
+
+  private normalizeWeeklyContractHours(input?: number): number {
+    if (!Number.isFinite(input)) {
+      return 40;
+    }
+    return Math.min(80, Math.max(1, Number(input)));
+  }
+
+  private computeDailyTargetSecondsFromWeekly(weeklyContractHours: number): number {
+    return Math.round((weeklyContractHours / 5) * 3600);
+  }
+
+  private resolveDailyTargetSeconds(user: Pick<User, "weeklyContractHours" | "dailyTargetSeconds">): number {
+    if (Number.isFinite(user.weeklyContractHours)) {
+      return this.computeDailyTargetSecondsFromWeekly(this.normalizeWeeklyContractHours(user.weeklyContractHours));
+    }
+    return user.dailyTargetSeconds ?? 28800;
+  }
+
+  private calculateWorkedSeconds(
+    entries: TimeEntry[],
+    nowIso?: string
+  ): { workedSeconds: number; hasOpenClockIn: boolean; firstClockInAt?: string } {
+    const ordered = [...entries].sort((a, b) => a.at.localeCompare(b.at));
+    let openClockInAt: string | undefined;
+    let firstClockInAt: string | undefined;
+    let workedSeconds = 0;
+
+    for (const entry of ordered) {
+      if (entry.type === "clock_in" && !openClockInAt) {
+        openClockInAt = entry.at;
+        if (!firstClockInAt) {
+          firstClockInAt = entry.at;
+        }
+      } else if (entry.type === "clock_out" && openClockInAt) {
+        const delta = Math.floor((new Date(entry.at).getTime() - new Date(openClockInAt).getTime()) / 1000);
+        workedSeconds += Math.max(0, delta);
+        openClockInAt = undefined;
+      }
+    }
+
+    if (openClockInAt && nowIso) {
+      const openDelta = Math.floor((new Date(nowIso).getTime() - new Date(openClockInAt).getTime()) / 1000);
+      workedSeconds += Math.max(0, openDelta);
+    }
+
+    return { workedSeconds, hasOpenClockIn: Boolean(openClockInAt), firstClockInAt };
+  }
+
+  private weekRange(referenceDate: string): { start: string; end: string } {
+    const target = new Date(`${referenceDate}T00:00:00.000Z`);
+    const dayIndex = (target.getUTCDay() + 6) % 7;
+    const start = new Date(target);
+    start.setUTCDate(start.getUTCDate() - dayIndex);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
   }
 
   async listUsers(): Promise<User[]> {
@@ -211,12 +299,29 @@ export class HrDataStore {
     return `${firstName.trim()} ${lastName.trim()}`.replace(/\s+/g, " ").trim();
   }
 
+  private async validateReferenceIds(roleId?: string, costCenterId?: string): Promise<void> {
+    if (roleId) {
+      const exists = (await this.listRoles()).some((item) => item.id === roleId);
+      if (!exists) {
+        throw new BadRequestException("Ruolo selezionato non valido");
+      }
+    }
+    if (costCenterId) {
+      const exists = (await this.listCostCenters()).some((item) => item.id === costCenterId);
+      if (!exists) {
+        throw new BadRequestException("Centro di costo selezionato non valido");
+      }
+    }
+  }
+
   async createUser(input: UserCreateInput): Promise<User> {
     const firstName = input.firstName.trim();
     const lastName = input.lastName.trim();
     if (!firstName || !lastName) {
       throw new BadRequestException("Nome e cognome sono obbligatori");
     }
+    await this.validateReferenceIds(input.roleId, input.costCenterId);
+    const weeklyContractHours = this.normalizeWeeklyContractHours(input.weeklyContractHours);
     const fullName = this.computeFullName(firstName, lastName);
     const email = await this.getUniqueEmail(firstName, lastName);
     const user: User = {
@@ -230,7 +335,14 @@ export class HrDataStore {
       companyId: input.companyId,
       roleId: input.roleId,
       costCenterId: input.costCenterId,
-      dailyTargetSeconds: input.dailyTargetSeconds ?? 28800,
+      contractType: input.contractType,
+      weeklyContractHours,
+      avsNumber: input.avsNumber,
+      iban: input.iban,
+      bankName: input.bankName,
+      bicSwift: input.bicSwift,
+      accountHolder: input.accountHolder,
+      dailyTargetSeconds: this.computeDailyTargetSecondsFromWeekly(weeklyContractHours),
       vacationAllowanceDays: input.vacationAllowanceDays ?? 22,
       birthDate: input.birthDate,
       phone: input.phone,
@@ -246,12 +358,19 @@ export class HrDataStore {
 
   async updateUser(userId: string, input: UserUpdateInput): Promise<User> {
     const user = await this.getUser(userId);
+    await this.validateReferenceIds(input.roleId, input.costCenterId);
+    const weeklyContractHours =
+      input.weeklyContractHours !== undefined
+        ? this.normalizeWeeklyContractHours(input.weeklyContractHours)
+        : this.normalizeWeeklyContractHours(user.weeklyContractHours);
     const nextFirstName = input.firstName ?? user.firstName ?? user.fullName.split(" ")[0] ?? "";
     const nextLastName = input.lastName ?? user.lastName ?? user.fullName.split(" ").slice(1).join(" ") ?? "";
     const fullName = input.fullName ?? this.computeFullName(nextFirstName, nextLastName);
     const payload: User = {
       ...user,
       ...input,
+      weeklyContractHours,
+      dailyTargetSeconds: this.computeDailyTargetSecondsFromWeekly(weeklyContractHours),
       firstName: nextFirstName,
       lastName: nextLastName,
       fullName
@@ -279,16 +398,21 @@ export class HrDataStore {
     return this.updateUser(userId, { managerId });
   }
 
-  listRoles(): Role[] {
+  async listRoles(): Promise<Role[]> {
+    await this.ensureSeedReferenceData();
+    if (this.useDb) {
+      const { data } = await this.supabase!.from("roles").select("*").order("name", { ascending: true });
+      return (data as Role[]) ?? [];
+    }
     return this.roles;
   }
 
-  createRole(input: { name: string; description?: string; permissions?: string[] }): Role {
+  async createRole(input: { name: string; description?: string; permissions?: string[] }): Promise<Role> {
     const name = input.name.trim();
     if (!name) {
       throw new BadRequestException("Nome ruolo obbligatorio");
     }
-    const existing = this.roles.find((role) => role.name.toLowerCase() === name.toLowerCase());
+    const existing = (await this.listRoles()).find((role) => role.name.toLowerCase() === name.toLowerCase());
     if (existing) {
       throw new BadRequestException("Ruolo gia esistente");
     }
@@ -298,12 +422,20 @@ export class HrDataStore {
       description: input.description,
       permissions: input.permissions ?? []
     };
+    if (this.useDb) {
+      await this.supabase!.from("roles").insert(role);
+      return role;
+    }
     this.roles.push(role);
     return role;
   }
 
-  updateRole(roleId: string, input: { name?: string; description?: string; permissions?: string[] }): Role {
-    const role = this.roles.find((item) => item.id === roleId);
+  async updateRole(
+    roleId: string,
+    input: { name?: string; description?: string; permissions?: string[] }
+  ): Promise<Role> {
+    const currentRoles = await this.listRoles();
+    const role = currentRoles.find((item) => item.id === roleId);
     if (!role) {
       throw new NotFoundException("Ruolo non trovato");
     }
@@ -312,7 +444,7 @@ export class HrDataStore {
       if (!name) {
         throw new BadRequestException("Nome ruolo obbligatorio");
       }
-      const duplicate = this.roles.find(
+      const duplicate = currentRoles.find(
         (item) => item.id !== roleId && item.name.toLowerCase() === name.toLowerCase()
       );
       if (duplicate) {
@@ -326,39 +458,56 @@ export class HrDataStore {
     if (input.permissions !== undefined) {
       role.permissions = input.permissions;
     }
+    if (this.useDb) {
+      await this.supabase!.from("roles").update(role).eq("id", roleId);
+    } else {
+      const memoryRole = this.roles.find((item) => item.id === roleId);
+      if (memoryRole) Object.assign(memoryRole, role);
+    }
     return role;
   }
 
-  deleteRole(roleId: string): Role {
-    const index = this.roles.findIndex((item) => item.id === roleId);
-    if (index === -1) {
+  async deleteRole(roleId: string): Promise<Role> {
+    const currentRoles = await this.listRoles();
+    const role = currentRoles.find((item) => item.id === roleId);
+    if (!role) {
       throw new NotFoundException("Ruolo non trovato");
     }
-    const role = this.roles[index];
     if (role.name === "admin") {
       throw new BadRequestException("Il ruolo admin non puo essere eliminato");
     }
-    const remainingAdmin = this.roles.some(
-      (item, position) => position !== index && item.name === "admin"
-    );
+    const remainingAdmin = currentRoles.some((item) => item.id !== roleId && item.name === "admin");
     if (!remainingAdmin) {
       throw new BadRequestException("Deve esistere almeno un ruolo admin");
     }
-    this.roles.splice(index, 1);
+    if (this.useDb) {
+      await this.supabase!.from("roles").delete().eq("id", roleId);
+    } else {
+      const index = this.roles.findIndex((item) => item.id === roleId);
+      if (index !== -1) this.roles.splice(index, 1);
+    }
     return role;
   }
 
-  listCostCenters(): CostCenter[] {
+  async listCostCenters(): Promise<CostCenter[]> {
+    await this.ensureSeedReferenceData();
+    if (this.useDb) {
+      const { data } = await this.supabase!
+        .from("cost_centers")
+        .select("*")
+        .order("code", { ascending: true });
+      return (data as CostCenter[]) ?? [];
+    }
     return this.costCenters;
   }
 
-  createCostCenter(input: { code: string; name: string; description?: string }): CostCenter {
+  async createCostCenter(input: { code: string; name: string; description?: string }): Promise<CostCenter> {
     const code = input.code.trim();
     const name = input.name.trim();
     if (!code || !name) {
       throw new BadRequestException("Codice e nome centro di costo sono obbligatori");
     }
-    const existing = this.costCenters.find(
+    const existing = (await this.listCostCenters()).find(
       (center) => center.code.toLowerCase() === code.toLowerCase()
     );
     if (existing) {
@@ -370,15 +519,20 @@ export class HrDataStore {
       name,
       description: input.description
     };
+    if (this.useDb) {
+      await this.supabase!.from("cost_centers").insert(costCenter);
+      return costCenter;
+    }
     this.costCenters.push(costCenter);
     return costCenter;
   }
 
-  updateCostCenter(
+  async updateCostCenter(
     costCenterId: string,
     input: { code?: string; name?: string; description?: string }
-  ): CostCenter {
-    const center = this.costCenters.find((item) => item.id === costCenterId);
+  ): Promise<CostCenter> {
+    const currentCostCenters = await this.listCostCenters();
+    const center = currentCostCenters.find((item) => item.id === costCenterId);
     if (!center) {
       throw new NotFoundException("Centro di costo non trovato");
     }
@@ -387,7 +541,7 @@ export class HrDataStore {
       if (!code) {
         throw new BadRequestException("Codice centro di costo obbligatorio");
       }
-      const duplicate = this.costCenters.find(
+      const duplicate = currentCostCenters.find(
         (item) => item.id !== costCenterId && item.code.toLowerCase() === code.toLowerCase()
       );
       if (duplicate) {
@@ -405,16 +559,28 @@ export class HrDataStore {
     if (input.description !== undefined) {
       center.description = input.description;
     }
+    if (this.useDb) {
+      await this.supabase!.from("cost_centers").update(center).eq("id", costCenterId);
+    } else {
+      const memoryCenter = this.costCenters.find((item) => item.id === costCenterId);
+      if (memoryCenter) Object.assign(memoryCenter, center);
+    }
     return center;
   }
 
-  deleteCostCenter(costCenterId: string): CostCenter {
-    const index = this.costCenters.findIndex((item) => item.id === costCenterId);
-    if (index === -1) {
+  async deleteCostCenter(costCenterId: string): Promise<CostCenter> {
+    const currentCostCenters = await this.listCostCenters();
+    const center = currentCostCenters.find((item) => item.id === costCenterId);
+    if (!center) {
       throw new NotFoundException("Centro di costo non trovato");
     }
-    const [removed] = this.costCenters.splice(index, 1);
-    return removed;
+    if (this.useDb) {
+      await this.supabase!.from("cost_centers").delete().eq("id", costCenterId);
+    } else {
+      const index = this.costCenters.findIndex((item) => item.id === costCenterId);
+      if (index !== -1) this.costCenters.splice(index, 1);
+    }
+    return center;
   }
 
   async assignRole(userId: string, role: User["role"]): Promise<User> {
@@ -441,68 +607,70 @@ export class HrDataStore {
 
   private async computeClockState(userId: string, date: string): Promise<{
     hasOpenClockIn: boolean;
+    isRunning: boolean;
     nextType: "clock_in" | "clock_out";
     todayEntries: TimeEntry[];
     minutesWorked: number;
+    workedSeconds: number;
+    overtimeSeconds: number;
     dailyTargetSeconds: number;
     remainingSeconds: number;
+    firstClockInAt?: string;
   }> {
     const todayEntries = (await this.listTimeEntries(userId, date)).sort((a, b) => a.at.localeCompare(b.at));
-    let openClockInAt: TimeEntry | null = null;
-    for (const item of todayEntries) {
-      if (item.type === "clock_in" && !openClockInAt) {
-        openClockInAt = item;
-      } else if (item.type === "clock_out" && openClockInAt) {
-        openClockInAt = null;
-      }
-    }
-    const minutesWorked = todayEntries.reduce((acc, curr, index) => {
-      if (curr.type === "clock_in") {
-        const out = todayEntries[index + 1];
-        if (out?.type === "clock_out") {
-          const delta =
-            (new Date(out.at).getTime() - new Date(curr.at).getTime()) / (1000 * 60);
-          return acc + Math.max(0, Math.floor(delta));
-        }
-      }
-      return acc;
-    }, 0);
+    const live = this.calculateWorkedSeconds(todayEntries, new Date().toISOString());
+    const workedSeconds = live.workedSeconds;
+    const minutesWorked = Math.floor(workedSeconds / 60);
     const user = await this.getUser(userId);
-    const dailyTargetSeconds = user.dailyTargetSeconds ?? 28800;
-    const remainingSeconds = Math.max(0, dailyTargetSeconds - minutesWorked * 60);
+    const dailyTargetSeconds = this.resolveDailyTargetSeconds(user);
+    const remainingSeconds = Math.max(0, dailyTargetSeconds - workedSeconds);
+    const overtimeSeconds = Math.max(0, workedSeconds - dailyTargetSeconds);
     return {
-      hasOpenClockIn: Boolean(openClockInAt),
-      nextType: openClockInAt ? "clock_out" : "clock_in",
+      hasOpenClockIn: live.hasOpenClockIn,
+      isRunning: live.hasOpenClockIn,
+      nextType: live.hasOpenClockIn ? "clock_out" : "clock_in",
       todayEntries,
       minutesWorked,
+      workedSeconds,
+      overtimeSeconds,
       dailyTargetSeconds,
-      remainingSeconds
+      remainingSeconds,
+      firstClockInAt: live.firstClockInAt
     };
   }
 
   async getClockStatus(userId: string, date: string): Promise<{
     date: string;
     hasOpenClockIn: boolean;
+    isRunning: boolean;
     nextType: "clock_in" | "clock_out";
     entriesCount: number;
     minutesWorked: number;
+    workedSeconds: number;
+    overtimeSeconds: number;
     dailyTargetSeconds: number;
     remainingSeconds: number;
+    firstClockInAt?: string;
   }> {
     const state = await this.computeClockState(userId, date);
     return {
       date,
       hasOpenClockIn: state.hasOpenClockIn,
+      isRunning: state.isRunning,
       nextType: state.nextType,
       entriesCount: state.todayEntries.length,
       minutesWorked: state.minutesWorked,
+      workedSeconds: state.workedSeconds,
+      overtimeSeconds: state.overtimeSeconds,
       dailyTargetSeconds: state.dailyTargetSeconds,
-      remainingSeconds: state.remainingSeconds
+      remainingSeconds: state.remainingSeconds,
+      firstClockInAt: state.firstClockInAt
     };
   }
 
-  async addTimeEntry(userId: string, type: "clock_in" | "clock_out", at: string): Promise<TimeEntry> {
-    const day = at.slice(0, 10);
+  async addTimeEntry(userId: string, type: "clock_in" | "clock_out", at?: string): Promise<TimeEntry> {
+    const atIso = at ?? new Date().toISOString();
+    const day = atIso.slice(0, 10);
     const clockState = await this.computeClockState(userId, day);
     if (clockState.nextType !== type) {
       if (type === "clock_in") {
@@ -514,7 +682,7 @@ export class HrDataStore {
       id: `te-${Date.now()}`,
       userId,
       type,
-      at
+      at: atIso
     };
     if (this.useDb) {
       await this.supabase!.from("time_entries").insert(entry);
@@ -554,33 +722,77 @@ export class HrDataStore {
       .sort((a, b) => b.date.localeCompare(a.date));
   }
 
-  private async refreshSummary(userId: string, date: string): Promise<void> {
-    const dayEntries = (await this.listTimeEntries(userId))
-      .filter((item) => item.at.startsWith(date))
-      .sort((a, b) => a.at.localeCompare(b.at));
+  async getOvertimeAggregates(
+    userId: string,
+    referenceDate: string,
+    scope?: "week" | "month" | "year"
+  ): Promise<{
+    referenceDate: string;
+    week: { overtimeSeconds: number; overtimeHours: number };
+    month: { overtimeSeconds: number; overtimeHours: number };
+    year: { overtimeSeconds: number; overtimeHours: number };
+  } | { scope: "week" | "month" | "year"; overtimeSeconds: number; overtimeHours: number }> {
+    const summaries = await this.listWorkdaySummary(userId);
+    const { start, end } = this.weekRange(referenceDate);
+    const monthPrefix = referenceDate.slice(0, 7);
+    const yearPrefix = referenceDate.slice(0, 4);
+    const user = await this.getUser(userId);
+    const targetSeconds = this.resolveDailyTargetSeconds(user);
 
-    const minutesWorked = dayEntries.reduce((acc, curr, index) => {
-      if (curr.type === "clock_in") {
-        const out = dayEntries[index + 1];
-        if (out?.type === "clock_out") {
-          const delta =
-            (new Date(out.at).getTime() - new Date(curr.at).getTime()) / (1000 * 60);
-          return acc + Math.max(0, Math.floor(delta));
-        }
-      }
-      return acc;
-    }, 0);
+    const sumOvertime = (items: WorkdaySummary[]): number =>
+      items.reduce((acc, item) => {
+        const fallbackOvertime = Math.max(0, (item.workedSeconds ?? item.minutesWorked * 60) - targetSeconds);
+        return acc + (item.overtimeSeconds ?? fallbackOvertime);
+      }, 0);
+
+    const weekOvertimeSeconds = sumOvertime(
+      summaries.filter((item) => item.date >= start && item.date <= end)
+    );
+    const monthOvertimeSeconds = sumOvertime(
+      summaries.filter((item) => item.date.startsWith(monthPrefix))
+    );
+    const yearOvertimeSeconds = sumOvertime(
+      summaries.filter((item) => item.date.startsWith(yearPrefix))
+    );
+
+    const result = {
+      referenceDate,
+      week: { overtimeSeconds: weekOvertimeSeconds, overtimeHours: weekOvertimeSeconds / 3600 },
+      month: { overtimeSeconds: monthOvertimeSeconds, overtimeHours: monthOvertimeSeconds / 3600 },
+      year: { overtimeSeconds: yearOvertimeSeconds, overtimeHours: yearOvertimeSeconds / 3600 }
+    };
+
+    if (!scope) {
+      return result;
+    }
+
+    return {
+      scope,
+      overtimeSeconds: result[scope].overtimeSeconds,
+      overtimeHours: result[scope].overtimeHours
+    };
+  }
+
+  private async refreshSummary(userId: string, date: string): Promise<void> {
+    const dayEntries = (await this.listTimeEntries(userId, date)).sort((a, b) => a.at.localeCompare(b.at));
+    const workedSeconds = this.calculateWorkedSeconds(dayEntries).workedSeconds;
+    const minutesWorked = Math.floor(workedSeconds / 60);
+    const user = await this.getUser(userId);
+    const dailyTargetSeconds = this.resolveDailyTargetSeconds(user);
+    const overtimeSeconds = Math.max(0, workedSeconds - dailyTargetSeconds);
 
     const existing = (await this.listWorkdaySummary(userId)).find((item) => item.date === date);
     if (existing) {
       if (this.useDb) {
         await this.supabase!
           .from("workday_summaries")
-          .update({ minutesWorked })
+          .update({ minutesWorked, workedSeconds, overtimeSeconds })
           .eq("userId", userId)
           .eq("date", date);
       } else {
         existing.minutesWorked = minutesWorked;
+        existing.workedSeconds = workedSeconds;
+        existing.overtimeSeconds = overtimeSeconds;
       }
       return;
     }
@@ -588,6 +800,8 @@ export class HrDataStore {
       userId,
       date,
       minutesWorked,
+      workedSeconds,
+      overtimeSeconds,
       mode: "office"
     } as WorkdaySummary;
     if (this.useDb) {
@@ -606,7 +820,14 @@ export class HrDataStore {
       const list = await this.listWorkdaySummary(userId);
       const summary = list.find((item) => item.date === date);
       if (!summary) {
-        const newSummary: WorkdaySummary = { userId, date, minutesWorked: 0, mode };
+        const newSummary: WorkdaySummary = {
+          userId,
+          date,
+          minutesWorked: 0,
+          workedSeconds: 0,
+          overtimeSeconds: 0,
+          mode
+        };
         await this.supabase!.from("workday_summaries").insert(newSummary);
         return newSummary;
       }
@@ -619,7 +840,14 @@ export class HrDataStore {
     }
     const summary = this.workdaySummaries.find((item) => item.userId === userId && item.date === date);
     if (!summary) {
-      const newSummary: WorkdaySummary = { userId, date, minutesWorked: 0, mode };
+      const newSummary: WorkdaySummary = {
+        userId,
+        date,
+        minutesWorked: 0,
+        workedSeconds: 0,
+        overtimeSeconds: 0,
+        mode
+      };
       this.workdaySummaries.push(newSummary);
       return newSummary;
     }
@@ -907,6 +1135,8 @@ export class HrDataStore {
   }
 
   async generatePayslip(userId: string, period: string): Promise<Payslip> {
+    const grossMonthlySalary = 5800;
+    const overtimeAmount = await this.countMonthlyOvertimeAmount(userId, period, grossMonthlySalary);
     const taxProfile = {
       canton: "TI",
       municipality: "Lugano",
@@ -916,12 +1146,12 @@ export class HrDataStore {
     };
     const result = calculateSwissPayroll({
       period,
-      grossMonthlySalary: 5800,
+      grossMonthlySalary,
       age: 37,
       vacationDaysUsed: await this.countLeaveDays(userId, period),
       sicknessDays: await this.countSicknessDays(userId, period),
       smartworkingDays: await this.countSmartworkingDays(userId, period),
-      overtimeAmount: 200,
+      overtimeAmount,
       taxProfile
     });
 
@@ -1122,5 +1352,27 @@ export class HrDataStore {
     return summaries.filter(
       (item) => item.date.startsWith(month) && item.mode === "smartworking"
     ).length;
+  }
+
+  private async countMonthlyOvertimeAmount(
+    userId: string,
+    period: string,
+    grossMonthlySalary: number
+  ): Promise<number> {
+    const month = period.slice(0, 7);
+    const user = await this.getUser(userId);
+    const weeklyContractHours = this.normalizeWeeklyContractHours(user.weeklyContractHours);
+    const monthlyContractHours = (weeklyContractHours * 52) / 12;
+    const hourlyRate = monthlyContractHours > 0 ? grossMonthlySalary / monthlyContractHours : 0;
+    const summaries = await this.listWorkdaySummary(userId);
+    const targetSeconds = this.resolveDailyTargetSeconds(user);
+    const overtimeSeconds = summaries
+      .filter((item) => item.date.startsWith(month))
+      .reduce((acc, item) => {
+        const fallbackOvertime = Math.max(0, (item.workedSeconds ?? item.minutesWorked * 60) - targetSeconds);
+        return acc + (item.overtimeSeconds ?? fallbackOvertime);
+      }, 0);
+    const overtimeHours = overtimeSeconds / 3600;
+    return Math.round(overtimeHours * hourlyRate * 100) / 100;
   }
 }

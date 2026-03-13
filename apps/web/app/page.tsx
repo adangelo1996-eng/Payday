@@ -14,6 +14,7 @@ import {
   downloadPayslipPdf,
   fetchApprovals,
   fetchAttendanceEntries,
+  fetchAttendanceOvertimeAggregates,
   fetchAttendanceStatus,
   fetchAttendanceSummary,
   fetchCurrentUser,
@@ -22,6 +23,7 @@ import {
   fetchPayslips,
   rejectApproval,
   type ApprovalItem,
+  type AttendanceOvertimeAggregates,
   type AttendanceStatus,
   type LeaveBalance,
   type TimeEntry,
@@ -42,6 +44,7 @@ export default function HomePage(): React.JSX.Element {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [summary, setSummary] = useState<WorkdaySummary[]>([]);
   const [status, setStatus] = useState<AttendanceStatus | null>(null);
+  const [aggregates, setAggregates] = useState<AttendanceOvertimeAggregates | null>(null);
   const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
   const [approvals, setApprovals] = useState<ApprovalItem[]>([]);
   const [clockLoading, setClockLoading] = useState<"clock_in" | "clock_out" | null>(null);
@@ -69,13 +72,14 @@ export default function HomePage(): React.JSX.Element {
       try {
         const me = await fetchCurrentUser(tokenValue);
         const todayDate = new Date().toISOString().slice(0, 10);
-        const [payslipsList, orgChart, todayEntries, todaySummary, todayStatus, yearBalance, workflowApprovals] =
+        const [payslipsList, orgChart, todayEntries, todaySummary, todayStatus, overtimeAggregates, yearBalance, workflowApprovals] =
           await Promise.all([
             fetchPayslips(tokenValue).catch(() => [] as Payslip[]),
             fetchOrgChart(tokenValue).catch(() => ({ nodes: [], edges: [] }) as OrgChartResponse),
             fetchAttendanceEntries(tokenValue),
             fetchAttendanceSummary(tokenValue),
             fetchAttendanceStatus(tokenValue, todayDate),
+            fetchAttendanceOvertimeAggregates(tokenValue, todayDate),
             fetchLeaveBalance(tokenValue, Number(todayDate.slice(0, 4))),
             me.role === "employee"
               ? Promise.resolve([] as ApprovalItem[])
@@ -87,6 +91,7 @@ export default function HomePage(): React.JSX.Element {
         setEntries(todayEntries);
         setSummary(todaySummary);
         setStatus(todayStatus);
+        setAggregates(overtimeAggregates);
         setRemainingSeconds(todayStatus.remainingSeconds);
         setLeaveBalance(yearBalance);
         setApprovals(workflowApprovals);
@@ -108,7 +113,7 @@ export default function HomePage(): React.JSX.Element {
     }
     setRemainingSeconds(status.remainingSeconds);
     const timer = window.setInterval(() => {
-      setRemainingSeconds((current) => (current > 0 ? current - 1 : 0));
+      setRemainingSeconds((current) => (status.isRunning && current > 0 ? current - 1 : current));
     }, 1000);
     return () => window.clearInterval(timer);
   }, [status]);
@@ -149,14 +154,16 @@ export default function HomePage(): React.JSX.Element {
     setClockLoading(type);
     try {
       await clock(token, type);
-      const [entriesList, summaryList, statusValue] = await Promise.all([
+      const [entriesList, summaryList, statusValue, overtimeAggregates] = await Promise.all([
         fetchAttendanceEntries(token),
         fetchAttendanceSummary(token),
-        fetchAttendanceStatus(token, today)
+        fetchAttendanceStatus(token, today),
+        fetchAttendanceOvertimeAggregates(token, today)
       ]);
       setEntries(entriesList);
       setSummary(summaryList);
       setStatus(statusValue);
+      setAggregates(overtimeAggregates);
       setRemainingSeconds(statusValue.remainingSeconds);
     } catch (submitError) {
       setClockError(submitError instanceof Error ? submitError.message : "Errore timbratura");
@@ -299,6 +306,13 @@ export default function HomePage(): React.JSX.Element {
           <p>Timbrature oggi: {todayEntries.length}</p>
           <p>
             Minuti lavorati oggi: {todaySummary?.minutesWorked ?? 0} ({todaySummary?.mode ?? "office"})
+          </p>
+          <p>Straordinario oggi: {((status?.overtimeSeconds ?? 0) / 3600).toFixed(2)} h</p>
+          <p>
+            Straordinario settimana/mese/anno:{" "}
+            {aggregates
+              ? `${aggregates.week.overtimeHours.toFixed(2)}h / ${aggregates.month.overtimeHours.toFixed(2)}h / ${aggregates.year.overtimeHours.toFixed(2)}h`
+              : "-"}
           </p>
         </div>
       </section>

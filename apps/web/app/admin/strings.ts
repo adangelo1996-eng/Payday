@@ -7,7 +7,7 @@ export const adminStrings = {
   },
   users: {
     title: "Amministrazione utenti",
-    subtitle: "Gestisci utenti, ruoli e centri di costo in un'unica vista.",
+    subtitle: "Gestisci anagrafica utente, parametri HR e dati payroll.",
     searchPlaceholder: "Cerca per nome o email",
     addUserCta: "+ Aggiungi nuovo utente",
     detailTitleExisting: "Dettaglio utente",

@@ -11,7 +11,9 @@ interface AdminNavItem {
 }
 
 const NAV_ITEMS: AdminNavItem[] = [
-  { href: "/admin", label: adminStrings.sidebar.users }
+  { href: "/admin", label: adminStrings.sidebar.users },
+  { href: "/admin/roles", label: adminStrings.sidebar.roles },
+  { href: "/admin/cost-centers", label: adminStrings.sidebar.costCenters }
 ];
 
 export function AdminSidebar(): React.JSX.Element {
